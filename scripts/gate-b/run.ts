@@ -14,6 +14,7 @@ const APIFY_TOKEN = env("APIFY_TOKEN");
 const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
 const PRICE_IN = Number(process.env.GEMINI_PRICE_INPUT_PER_M) || null;
 const PRICE_OUT = Number(process.env.GEMINI_PRICE_OUTPUT_PER_M) || null;
+const APIFY_PER_1000 = Number(process.env.APIFY_PRICE_PER_1000) || null;
 const WITH_CAPTION = process.argv.includes("--caption");
 const DIR = "scripts/gate-b";
 const MAX_INLINE_BYTES = 18 * 1024 * 1024; // Gemini inline request limit is about 20 MB
@@ -39,7 +40,8 @@ async function fetchReel(url: string) {
   return {
     videoUrl: item.videoUrl as string | undefined,
     caption: (item.caption as string | undefined) ?? "",
-    apifyUsd: typeof run.usageTotalUsd === "number" ? run.usageTotalUsd : null,
+    // The actor bills per result (pay per event), so cost = results x price.
+    apifyUsd: APIFY_PER_1000 ? (items.length * APIFY_PER_1000) / 1000 : null,
   };
 }
 

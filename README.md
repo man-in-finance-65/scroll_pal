@@ -22,7 +22,7 @@ Hackathon build. Submissions close **Sun Oct 25, 2026, 11:59 PM ET**.
 | Gate | Command | Status |
 | :- | :- | :- |
 | B Reel to recipe | copy `scripts/gate-b/reels.example.txt` to `reels.txt`, add 10 reel links, then `npm run gate:b` (add `-- --caption` for fallback 1) | script ready, needs keys |
-| B unit tests | `npm test` | 5 pass |
+| B and C unit tests | `npm test` | 36 pass |
 
 Other gates are added here as they are built.
 
@@ -31,7 +31,8 @@ Other gates are added here as they are built.
 scripts/gate-b/   reel URL -> recipe JSON test script
 api/              Hono API for Cloud Run (to come, Gate A)
 app/              Expo app (to come, Gate A)
-config/           nutrition constants with source ids (Gate C)
-evidence/         evidence pack (Gate C)
+engine/           targets, screening, plan checker, backup planner, shopping list (Gate C)
+config/           nutrition constants, each tagged with a source id (Gate C)
+evidence/         evidence pack: the only sources Pal may cite (Gate C)
 docs/             checklists and guides
 ```

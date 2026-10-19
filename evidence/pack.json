@@ -1,0 +1,42 @@
+{
+  "_readme": "Every health number or claim Pal uses must point to an id here. status: verified = a person has read the source and confirmed it supports the claim; to-verify = not yet checked, must not be shown to testers. A registered dietitian reviews this file before Gate G.",
+  "sources": [
+    {
+      "id": "issn-protein-2017",
+      "title": "International Society of Sports Nutrition Position Stand: protein and exercise (Jäger et al., 2017)",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/28642676/",
+      "supports": ["1.4 to 2.0 g protein per kg per day for most exercising adults", "about 0.25 g/kg (20 to 40 g) protein per meal", "2.3 to 3.1 g/kg for resistance-trained people dieting for fat loss (not applied by default)"],
+      "status": "verified"
+    },
+    {
+      "id": "harvard-deficit",
+      "title": "Harvard Health: calorie deficit approach used by its weight center",
+      "url": null,
+      "supports": ["500 kcal/day deficit as a default", "aim for 1 to 2 lb loss per week at most", "do not go below about 1,200 kcal (women) or 1,500 kcal (men)", "warning signs: persistent fatigue, irritability, preoccupation with food"],
+      "status": "verified",
+      "todo": "Paste the article URL; the plan marks the content as checked."
+    },
+    {
+      "id": "mifflin-1990",
+      "title": "Mifflin MD et al. A new predictive equation for resting energy expenditure in healthy individuals. Am J Clin Nutr. 1990",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/2305711/",
+      "supports": ["Mifflin-St Jeor resting energy equation"],
+      "status": "to-verify"
+    },
+    {
+      "id": "activity-factors",
+      "title": "Activity multipliers for total daily energy (source to choose)",
+      "url": null,
+      "supports": ["1.2 sedentary, 1.375 light, 1.55 moderate, 1.725 very active"],
+      "status": "to-verify",
+      "todo": "Pick a guideline source (e.g. Health Canada DRI physical activity levels) and confirm the values."
+    },
+    {
+      "id": "who-bmi",
+      "title": "WHO: body mass index classification (underweight below 18.5)",
+      "url": null,
+      "supports": ["BMI under 18.5 is underweight"],
+      "status": "to-verify"
+    }
+  ]
+}
