@@ -31,7 +31,7 @@ Phone app (Expo) talks only to our API on Cloud Run. The API holds all keys and 
 Day plan: Mon B; Tue A; Wed C; Thu D+E; Fri polish, brand, F; Sat G, video, freeze at noon; Sun H only.
 
 ## 4. Cost math (assumptions labelled)
-- Reel fetch via Apify: about $0.002 per reel (from the reel-watcher README; verify). 25 reels x $0.002 = $0.05. 200 reels x $0.002 = $0.40.
+- Reel fetch via Apify `apify/instagram-scraper`: pay per result, $2.70 per 1,000 on the Free plan (actor docs, checked Oct 19) = $0.0027 per reel. 25 reels x $0.0027 = $0.07. 200 reels x $0.0027 = $0.54.
 - Gemini video: unknown until Gate B logs tokens per reel. Do not guess.
 - Chat import: **assumption** 200 conversations x 3,000 tokens = 600,000 tokens. At an **assumed** $3 per 1,000,000 input tokens: 600,000 x 3 / 1,000,000 = $1.80 per user. 10 testers x $1.80 = $18.00. Replace the price with the current one.
 - Guard: cache every reel by URL, cap reels per user (50), cap import to 200 conversations.
