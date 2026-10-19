@@ -21,7 +21,8 @@ Hackathon build. Submissions close **Sun Oct 25, 2026, 11:59 PM ET**.
 ## Run the gate tests
 | Gate | Command | Status |
 | :- | :- | :- |
-| B Reel to recipe | `npm run gate:b` (reads `scripts/gate-b/reels.txt`) | script ready, needs keys |
+| B Reel to recipe | copy `scripts/gate-b/reels.example.txt` to `reels.txt`, add 10 reel links, then `npm run gate:b` (add `-- --caption` for fallback 1) | script ready, needs keys |
+| B unit tests | `npm test` | 5 pass |
 
 Other gates are added here as they are built.
 

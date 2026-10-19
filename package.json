@@ -1,0 +1,10 @@
+{
+  "name": "scroll-pal",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "gate:b": "node --env-file-if-exists=.env scripts/gate-b/run.ts",
+    "test": "node --test"
+  }
+}
