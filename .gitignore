@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+dist/
+.expo/
+*.log
+.DS_Store
+# Personal exports must never be committed
+data/private/
+**/saved_posts.json
+**/conversations.json
+scripts/gate-b/out/
+scripts/gate-b/reels.txt
