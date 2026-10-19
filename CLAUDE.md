@@ -6,7 +6,7 @@ Pal is a mobile app with an AI companion (mascot "Pal"). It turns the user's sav
 The builder (Vicente) is a business/finance person, not an engineer. Explain anything non-obvious in plain English. Never assume a technical term is known.
 
 ## Team and branches
-- Contributors: man-in-finance-65 (Vicente), ArjunB3hl (Arjun), Mohit Solanki.
+- Contributors: man-in-finance-65 (Vicente), ArjunB3hl (Arjun), MohitS2004 (Mohit Solanki).
 - Each contributor works on `dev/<github-username>` and merges into `main` through a pull request.
 - Roles are not assigned yet. Do not assume who owns a gate.
 

@@ -6,7 +6,7 @@ Plain-English version: each of us has our own copy of the code (a "branch") to w
 | :- | :- | :- |
 | Vicente | man-in-finance-65 | `dev/man-in-finance-65` |
 | Arjun | ArjunB3hl | `dev/ArjunB3hl` |
-| Mohit Solanki | (username pending) | `dev/<username>` |
+| Mohit Solanki | MohitS2004 | `dev/MohitS2004` |
 
 ## Rules
 1. Work only on your own branch. Pull `main` into it often (`git pull origin main`) so you don't drift.
