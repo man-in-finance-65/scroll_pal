@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { score, type ReelResult } from "./score.ts";
+import { score, scoreFilter, type ReelResult } from "./score.ts";
 
 const reel = (over: Partial<ReelResult> = {}): ReelResult => ({
   url: "u",
@@ -44,4 +44,10 @@ test("a reel over 90 seconds fails speed", () => {
 test("missing cost fails cost logging", () => {
   const results = [...Array(10)].map(() => reel({ costUsd: null }));
   assert.equal(score(results).checks.costLogged.pass, false);
+});
+
+test("filter test passes when no non-food reel is called a recipe", () => {
+  const notFood = reel({ recipe: { is_recipe: false, title: "", steps: [], ingredients: [] } });
+  assert.equal(scoreFilter([notFood, notFood]).pass, true);
+  assert.equal(scoreFilter([notFood, reel()]).pass, false);
 });

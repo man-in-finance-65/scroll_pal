@@ -1,8 +1,9 @@
 // Gate B: reel URL in, recipe JSON out. No app, no database.
-// Usage: npm run gate:b            (video only)
-//        npm run gate:b -- --caption   (fallback 1: caption text plus video)
+// Usage: npm run gate:b                                   (reels.food.txt, video only)
+//        npm run gate:b -- --caption                      (fallback 1: caption text plus video)
+//        npm run gate:b -- --file reels.not-food.txt --expect-none   (filter test: no recipes allowed)
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { score, type ReelResult } from "./score.ts";
+import { score, scoreFilter, type ReelResult } from "./score.ts";
 
 const env = (k: string) => {
   const v = process.env[k];
@@ -17,9 +18,12 @@ const PRICE_OUT = Number(process.env.GEMINI_PRICE_OUTPUT_PER_M) || null;
 const APIFY_PER_1000 = Number(process.env.APIFY_PRICE_PER_1000) || null;
 const WITH_CAPTION = process.argv.includes("--caption");
 const DIR = "scripts/gate-b";
+const arg = (name: string) => { const i = process.argv.indexOf(name); return i > 0 ? process.argv[i + 1] : undefined; };
+const FILE = arg("--file") ?? "reels.food.txt";
+const EXPECT_NONE = process.argv.includes("--expect-none");
 const MAX_INLINE_BYTES = 18 * 1024 * 1024; // Gemini inline request limit is about 20 MB
 
-const urls = readFileSync(`${DIR}/reels.txt`, "utf8")
+const urls = readFileSync(`${DIR}/${FILE}`, "utf8")
   .split("\n").map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
 
 // Apify: fetch the media for a URL the user gave us. No Instagram login involved.
@@ -114,10 +118,10 @@ for (const url of urls) {
   console.log(`${r.ok ? "OK  " : "FAIL"} ${r.seconds.toFixed(0)}s ${r.costUsd !== null ? "$" + r.costUsd.toFixed(4) : "$?"} ${url} ${r.error ?? r.recipe?.title ?? ""}`);
 }
 
-const verdict = score(results);
+const verdict = EXPECT_NONE ? scoreFilter(results) : score(results);
 mkdirSync(`${DIR}/out`, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
-writeFileSync(`${DIR}/out/results-${stamp}.json`, JSON.stringify({ model: MODEL, withCaption: WITH_CAPTION, verdict, results }, null, 2));
+writeFileSync(`${DIR}/out/results-${stamp}.json`, JSON.stringify({ model: MODEL, file: FILE, withCaption: WITH_CAPTION, verdict, results }, null, 2));
 console.log(`\nGate B: ${verdict.pass ? "PASS" : "FAIL"}`);
 for (const [name, c] of Object.entries(verdict.checks)) console.log(`  ${c.pass ? "pass" : "FAIL"}  ${name}: ${c.value}`);
 console.log(`Saved scripts/gate-b/out/results-${stamp}.json`);

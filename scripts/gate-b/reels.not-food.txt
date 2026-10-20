@@ -1,0 +1,11 @@
+# Filter test: none of these is a recipe. Pal must answer "not a recipe" for every one.
+https://www.instagram.com/reel/DeeZPyaoN3O/
+https://www.instagram.com/reel/DdfROhPxo5G/
+https://www.instagram.com/reel/DT9qWK_jZdu/
+https://www.instagram.com/reel/DcuBgvdSA1f/
+https://www.instagram.com/reel/Dek5zSDKlVo/
+https://www.instagram.com/reel/DekDZrkq0uk/
+https://www.instagram.com/reel/DdVQei6tSHj/
+https://www.instagram.com/reel/DeftU1mIzdx/
+https://www.instagram.com/reel/Dehig-mspTd/
+https://www.instagram.com/p/DTpr4x0Akfg/

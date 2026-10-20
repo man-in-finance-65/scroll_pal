@@ -2,6 +2,13 @@
 
 Every fallback, blocker and non-obvious choice. Newest at the top.
 
+## 2026-10-20: Clerk application and iPhone builds
+- Clerk application: `app_3KxNEYnchYLltwg5H3bS7ls5TrZ` (picked in the Clerk Dashboard, Expo). The app already uses `@clerk/expo`, so we link and pull keys instead of running `clerk init` (init could create a second application). Steps in docs/GATE_A_PHONE.md.
+- iPhone: installing our own app (with the share button) on testers' iPhones needs a paid Apple Developer account. Google Cloud can't replace it, because it hosts the server and has nothing to do with signing iPhone apps. Free path until Vicente decides: Android development build, plus Expo Go or the web version for iPhone users (with the paste-link box instead of the share button).
+
+## 2026-10-20: Gate B reel lists in the repo
+- `scripts/gate-b/reels.food.txt` (Vicente's 10 picks) and `reels.not-food.txt` (filter test) are committed without tracking parameters, so any teammate can rerun Gate B.
+
 ## 2026-10-20: Gate A choices
 - Clerk's Expo package is now `@clerk/expo` (v4); `@clerk/clerk-expo` in the stack list is its old name. Same product, not a substitution.
 - Sign-in uses Clerk's hosted sign-in screen (`useHostedAuth`). Clerk maintains that screen, it works in Expo Go for a quick test, and it needs no extra native modules. Swap for Clerk's native components later if we want it styled in Pal colours.

@@ -23,7 +23,8 @@ Hackathon build. Submissions close **Sun Oct 25, 2026, 11:59 PM ET**.
 ## Run the gate tests
 | Gate | Command | Status |
 | :- | :- | :- |
-| B Reel to recipe | copy `scripts/gate-b/reels.example.txt` to `reels.txt`, add 10 reel links, then `npm run gate:b` (add `-- --caption` for fallback 1) | script ready, needs keys |
+| B Reel to recipe | `npm run gate:b` (your 10 reels in `scripts/gate-b/reels.food.txt`; add `-- --caption` for fallback 1) | script ready, needs Gemini + Apify keys |
+| B filter test | `npm run gate:b -- --file reels.not-food.txt --expect-none` | ready |
 | B and C unit tests | `npm test` | 36 pass |
 
 | A App shell | see `docs/GATE_A_PHONE.md` | built, needs keys and a phone |

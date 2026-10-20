@@ -33,3 +33,14 @@ export function score(results: ReelResult[]) {
   };
   return { pass: Object.values(checks).every((c) => c.pass), checks };
 }
+
+// Filter test: on reels that aren't food, every reel must be fetched and judged "not a recipe".
+export function scoreFilter(results: ReelResult[]) {
+  const failed = results.filter((r) => !r.ok).map((r) => r.url);
+  const falseRecipes = results.filter(isRecipe).map((r) => r.url);
+  const checks = {
+    fetched: { pass: failed.length === 0, value: failed.length ? `failed: ${failed.join(", ")}` : `all ${results.length} fetched` },
+    noFalseRecipes: { pass: falseRecipes.length === 0, value: falseRecipes.length ? `called a recipe: ${falseRecipes.join(", ")}` : "none called a recipe" },
+  };
+  return { pass: Object.values(checks).every((c) => c.pass), checks };
+}
