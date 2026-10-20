@@ -2,6 +2,15 @@
 
 Every fallback, blocker and non-obvious choice. Newest at the top.
 
+## 2026-10-20: Gate A choices
+- Clerk's Expo package is now `@clerk/expo` (v4); `@clerk/clerk-expo` in the stack list is its old name. Same product, not a substitution.
+- Sign-in uses Clerk's hosted sign-in screen (`useHostedAuth`). Clerk maintains that screen, it works in Expo Go for a quick test, and it needs no extra native modules. Swap for Clerk's native components later if we want it styled in Pal colours.
+- Expo SDK 58 (latest). App id `com.scrollpal.app` is a placeholder; change it before the first store build if you want a different one.
+- The API is plain Node (no build step) with the screening and nutrition engine imported directly. Cloud Run builds it from `api/Dockerfile`.
+
+## 2026-10-20: Gate B reel set
+- Vicente's 10 picked reels (Drive doc "MY ALGORITHM") are AI and comedy reels, not food. They make a good **filter test** (Pal must answer "not a recipe" for all 10) but can't pass Gate B, which needs food reels. 10 food reels are still needed.
+
 ## 2026-10-19: Instagram import paths
 - Main path: Instagram's official "Download your information" export (Saved, JSON). Backups: share button (Gate E) and paste-link box.
 - Not building the desktop "copy my saved links" button (Vicente agreed). Revisit only if the export email is slow.
