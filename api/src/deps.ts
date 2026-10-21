@@ -1,7 +1,11 @@
 // Real Clerk and SurrealDB wiring. Kept apart from app.ts so tests can swap in fakes.
+import { readFileSync } from "node:fs";
 import { verifyToken } from "@clerk/backend";
 import { RecordId, Surreal } from "surrealdb";
+import { PodError } from "../../engine/pods.ts";
 import type { Deps, UserRow } from "./app.ts";
+import { claudeExtractor } from "./extract.ts";
+import { SurrealPodStore } from "./surreal-store.ts";
 
 const env = (k: string) => {
   const v = process.env[k];
@@ -19,7 +23,14 @@ export async function realDeps(): Promise<Deps> {
   });
 
   const rid = (clerkId: string) => new RecordId("user", clerkId);
+  const prices = JSON.parse(readFileSync(new URL("../../data/prices.json", import.meta.url), "utf8"));
+  const extract = process.env.ANTHROPIC_API_KEY
+    ? claudeExtractor()
+    : async () => { throw new PodError("The server has no Claude key yet, so it can't read reels. Use a sample dish."); };
   return {
+    pods: new SurrealPodStore(db),
+    extract,
+    prices,
     verify: async (token) => {
       const { data } = await verifyToken(token, { secretKey });
       return (data as { sub?: string } | undefined)?.sub ?? null;

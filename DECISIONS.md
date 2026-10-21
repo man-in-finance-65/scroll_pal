@@ -2,6 +2,18 @@
 
 Every fallback, blocker and non-obvious choice. Newest at the top.
 
+## 2026-10-21: Meal Prep Swap becomes the core flow
+- Pods of 3, one dish each, 27 portions cooked by one chef, 9 meals per member. All maths in `engine/swap.ts`; pod rules in `engine/pods.ts`. The same code runs on the server (SurrealDB) and in the app's demo mode (in memory).
+- Claude (`claude-opus-5-5`, structured JSON output, `fallbacks: "default"` so a declined request is retried on another model) extracts the dish name, per-serving ingredients, steps and macros. Vicente asked for Claude's macros, so CLAUDE.md rule 3 now has a written exception; the app labels them as estimates.
+- Claude can't watch a reel, so the reel option needs the caption pasted alongside the link. Screenshots are read as images.
+- Goal clashes: high-protein (protein per portion below the minimum), calorie target (portion above 115% of one meal's share), low-carb, vegetarian (meat or fish words in the ingredients).
+- Prep sheet: knife work first, long cooks started longest-first (a step that leads into a long cook, like browning before simmering, starts with it), then the rest, then portioning. A dish's own steps never get reordered.
+- Chef: the first to get 2 of 3 votes is selected. Chef fee = rate per portion × 27.
+- Cost split rounds to the cent; any leftover cent goes to the first member so the three shares add up to the total exactly.
+- `data/prices.json`: hand-typed typical Toronto prices (CAD), approximate. Unknown ingredients stay on the list marked "no price".
+- 3 chefs, 2 demo members (Maya, Dev) and 3 sample dishes are seed data. The demo pod needs 4 taps from you to reach a full swap.
+- New dependencies: `@anthropic-ai/sdk` and `zod` (API), `expo-image-picker` (app, for screenshots).
+
 ## 2026-10-21: Demo mode MVP
 - The app runs the whole meal-plan flow without Clerk, SurrealDB, Gemini or Apify keys ("demo mode"). Sign-in appears once Clerk keys exist.
 - 10 demo recipes stand in for processed reels. Their per-100 g values are typical USDA figures typed in by hand and labelled approximate in the app; calories and protein are still computed by the engine from grams. Replace with live USDA lookups.

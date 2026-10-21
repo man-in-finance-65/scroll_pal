@@ -1,3 +1,3 @@
-import { PalFlow } from "../features/pal/Flow";
+import { Root } from "../features/swap/Root";
 
-export default PalFlow;
+export default Root;

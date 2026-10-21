@@ -1,4 +1,3 @@
-import { Link } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, Text, TextInput, View } from "react-native";
 import { computeTargets, type Activity, type Body, type Sex, type Targets } from "../../../../engine/targets.ts";
@@ -14,9 +13,8 @@ type Step = "welcome" | "about" | "health" | "declined" | "thinking" | "plan";
 const BY_ID = new Map(DEMO_RECIPES.map((r) => [r.id, r]));
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const MEAL_ORDER = ["Breakfast", "Lunch", "Snack", "Dinner"];
-const hasClerk = !!process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-export function PalFlow() {
+export function PalFlow({ onExit }: { onExit?: () => void } = {}) {
   const [step, setStep] = useState<Step>("welcome");
   const [about, setAbout] = useState({ sex: null as Sex | null, age: "", heightCm: "", weightKg: "", activity: null as Activity | null, pace: 1, meals: 3 });
   const [health, setHealth] = useState<Record<string, boolean | null>>({ preg: null, ed: null, diabetes: null, other: null });
@@ -50,7 +48,7 @@ export function PalFlow() {
         </View>
         <Button label="Build my week" onPress={() => setStep("about")} />
         <Text style={[s.sub, { textAlign: "center", fontSize: 13 }]}>For adults. Pal isn't medical advice.</Text>
-        {hasClerk && <Link href="/account" style={{ textAlign: "center", color: colors.violet, fontWeight: "600" }}>Sign in</Link>}
+        {onExit && <Pressable onPress={onExit}><Text style={{ textAlign: "center", color: colors.violet, fontWeight: "600" }}>‹ Back to Meal Prep Swap</Text></Pressable>}
       </Screen>
     );
 

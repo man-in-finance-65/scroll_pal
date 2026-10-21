@@ -5,6 +5,7 @@ WORKDIR /srv
 COPY engine engine
 COPY config config
 COPY evidence evidence
+COPY data data
 COPY api/package.json api/package-lock.json api/
 RUN cd api && npm ci --omit=dev
 COPY api/src api/src

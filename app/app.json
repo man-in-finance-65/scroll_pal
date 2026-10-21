@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "ScrollPal",
+    "name": "Scroll Pal",
     "slug": "scroll-pal",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -40,6 +40,12 @@
           "backgroundColor": "#F6F5FF",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Scroll Pal opens your photos so you can pick a recipe screenshot."
         }
       ]
     ],
