@@ -36,7 +36,8 @@ export function verifyPlan(plan: WeekPlan, recipes: Map<string, Recipe>, t: Targ
   return { pass: all.length === 0, days, problems: all };
 }
 
-const SERVING_STEPS = [0.5, 1, 1.5, 2];
+// Fewer meals a day need bigger portions to reach the target.
+const servingSteps = (mealsPerDay: number) => (mealsPerDay <= 2 ? [0.5, 1, 1.5, 2, 2.5, 3] : [0.5, 1, 1.5, 2]);
 const MAX_CANDIDATES = 10;
 
 function* combos<T>(items: T[], k: number, start = 0, picked: T[] = []): Generator<T[]> {
@@ -44,9 +45,9 @@ function* combos<T>(items: T[], k: number, start = 0, picked: T[] = []): Generat
   for (let i = start; i < items.length; i++) yield* combos(items, k, i + 1, [...picked, items[i]]);
 }
 
-function* servingVectors(k: number): Generator<number[]> {
+function* servingVectors(k: number, steps: number[]): Generator<number[]> {
   if (k === 0) { yield []; return; }
-  for (const s of SERVING_STEPS) for (const rest of servingVectors(k - 1)) yield [s, ...rest];
+  for (const s of steps) for (const rest of servingVectors(k - 1, steps)) yield [s, ...rest];
 }
 
 // Fallback planner: picks meals in code, no LLM. Prefers recipes used least so far for variety.
@@ -63,7 +64,7 @@ export function buildWeekInCode(recipes: Recipe[], t: Targets, mealsPerDay: numb
     const choices = pool.length >= mealsPerDay ? pool : Array.from({ length: mealsPerDay }, (_, i) => pool[i % pool.length]);
     let best: { meals: Meal[]; score: number } | null = null;
     for (const set of combos(choices, mealsPerDay)) {
-      for (const servings of servingVectors(mealsPerDay)) {
+      for (const servings of servingVectors(mealsPerDay, servingSteps(mealsPerDay))) {
         let kcal = 0, protein = 0, reuse = 0;
         set.forEach((r, i) => {
           const n = nutrition.get(r.id)!;
@@ -71,8 +72,11 @@ export function buildWeekInCode(recipes: Recipe[], t: Targets, mealsPerDay: numb
           protein += n.proteinG * servings[i];
           reuse += used.get(r.id)!;
         });
+        // Calories inside tolerance come first (that is the deficit); protein next; variety last.
+        const kcalOff = Math.abs(kcal - t.calories) / t.calories;
+        const outside = Math.max(0, kcalOff - TOLERANCE.calorieShare);
         const shortfall = Math.max(0, t.proteinG - protein) / t.proteinG;
-        const score = Math.abs(kcal - t.calories) / t.calories + 2 * shortfall + 0.005 * reuse;
+        const score = kcalOff + 20 * outside + 2 * shortfall + 0.005 * reuse;
         if (!best || score < best.score) best = { score, meals: set.map((r, i) => ({ recipeId: r.id, servings: servings[i] })) };
       }
     }

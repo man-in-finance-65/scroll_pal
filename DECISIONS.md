@@ -2,6 +2,12 @@
 
 Every fallback, blocker and non-obvious choice. Newest at the top.
 
+## 2026-10-21: Demo mode MVP
+- The app runs the whole meal-plan flow without Clerk, SurrealDB, Gemini or Apify keys ("demo mode"). Sign-in appears once Clerk keys exist.
+- 10 demo recipes stand in for processed reels. Their per-100 g values are typical USDA figures typed in by hand and labelled approximate in the app; calories and protein are still computed by the engine from grams. Replace with live USDA lookups.
+- Planner change: a day must land within 5% of the calorie target first; protein is next. Before this, a 90 kg woman's plan overshot calories chasing protein.
+- For the dietitian: protein is 1.6 g per kg of current body weight. For people with a high BMI that gives a target the calorie budget can't reach (144 g at 1,392 kcal). Ask whether to base it on a goal or adjusted weight instead.
+
 ## 2026-10-20: Clerk application and iPhone builds
 - Clerk application: `app_3KxNEYnchYLltwg5H3bS7ls5TrZ` (picked in the Clerk Dashboard, Expo). The app already uses `@clerk/expo`, so we link and pull keys instead of running `clerk init` (init could create a second application). Steps in docs/GATE_A_PHONE.md.
 - iPhone: installing our own app (with the share button) on testers' iPhones needs a paid Apple Developer account. Google Cloud can't replace it, because it hosts the server and has nothing to do with signing iPhone apps. Free path until Vicente decides: Android development build, plus Expo Go or the web version for iPhone users (with the paste-link box instead of the share button).
