@@ -1,0 +1,27 @@
+name: Publish to Expo Go
+
+on:
+  push:
+    branches: [main, claude/affectionate-lovelace-ypcg6n]
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Who am I
+        run: npx -y eas-cli@latest whoami
+      - name: Link EAS project
+        run: npx -y eas-cli@latest init --non-interactive --force
+      - name: Publish update
+        run: npx -y eas-cli@latest update --branch preview --message "${{ github.event.head_commit.message || 'manual publish' }}" --non-interactive
