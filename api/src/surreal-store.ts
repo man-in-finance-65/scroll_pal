@@ -3,7 +3,7 @@ import { RecordId, type Surreal } from "surrealdb";
 import type { Goal } from "../../engine/swap.ts";
 import type { Member, Pod, PodState, PodStore, StoredDish } from "../../engine/pods.ts";
 
-type PodRow = { code: string; name: string; members: Member[]; votes: Record<string, string> };
+type PodRow = { code: string; name: string; members: Member[]; receiptTotal?: number | null; instacartUrl?: string | null };
 const key = (podId: string, userId: string) => `${podId}__${userId}`;
 
 export class SurrealPodStore implements PodStore {
@@ -11,7 +11,7 @@ export class SurrealPodStore implements PodStore {
   constructor(db: Surreal) { this.db = db; }
 
   private toPod(id: string, row: PodRow): Pod {
-    return { id, code: row.code, name: row.name, members: row.members ?? [], votes: row.votes ?? {} };
+    return { id, code: row.code, name: row.name, members: row.members ?? [], receiptTotal: row.receiptTotal ?? null, instacartUrl: row.instacartUrl ?? null };
   }
 
   async create(pod: Pod) {
@@ -50,8 +50,8 @@ export class SurrealPodStore implements PodStore {
     await this.db.update(new RecordId("pod", podId)).merge({ members });
   }
 
-  async saveVotes(podId: string, votes: Record<string, string>) {
-    await this.db.update(new RecordId("pod", podId)).merge({ votes });
+  async savePodFields(podId: string, fields: Partial<Pick<Pod, "receiptTotal" | "instacartUrl">>) {
+    await this.db.update(new RecordId("pod", podId)).merge(fields);
   }
 
   async saveGoal(podId: string, userId: string, goal: Goal) {

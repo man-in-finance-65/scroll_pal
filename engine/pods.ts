@@ -1,11 +1,11 @@
 // Pods: three people, three dishes, one chef. The same code runs on the server (SurrealDB)
 // and inside the app's demo mode (in memory), so both behave identically.
-import { computeSwap, goalConflicts, MEMBERS_PER_POD, type Chef, type Dish, type Goal, type PriceTable, type Swap } from "./swap.ts";
+import { computeSwap, goalConflicts, MEMBERS_PER_POD, type Dish, type Goal, type PriceTable, type Swap } from "./swap.ts";
 
 export type Member = { userId: string; name: string };
 export type DishSource = { kind: "reel"; url: string; caption: string } | { kind: "screenshot" } | { kind: "sample" };
 export type StoredDish = Dish & { memberId: string; source: DishSource };
-export type Pod = { id: string; code: string; name: string; members: Member[]; votes: Record<string, string> };
+export type Pod = { id: string; code: string; name: string; members: Member[]; receiptTotal?: number | null; instacartUrl?: string | null };
 export type PodState = { pod: Pod; goals: Record<string, Goal>; dishes: Record<string, StoredDish> };
 
 export interface PodStore {
@@ -14,7 +14,7 @@ export interface PodStore {
   findByCode(code: string): Promise<Pod | null>;
   listForUser(userId: string): Promise<Pod[]>;
   saveMembers(podId: string, members: Member[]): Promise<void>;
-  saveVotes(podId: string, votes: Record<string, string>): Promise<void>;
+  savePodFields(podId: string, fields: Partial<Pick<Pod, "receiptTotal" | "instacartUrl">>): Promise<void>;
   saveGoal(podId: string, userId: string, goal: Goal): Promise<void>;
   saveDish(podId: string, userId: string, dish: StoredDish): Promise<void>;
 }
@@ -26,10 +26,13 @@ export class PodError extends Error {
 
 // ---------- Seed data ----------
 
-export const CHEFS: Chef[] = [
-  { id: "chef-amara", name: "Chef Amara", ratePerPortion: 3.5, specialty: "High-protein batch cooking", bio: "Cooks for two Toronto run clubs every Sunday. Fast, tidy, big on spice." },
-  { id: "chef-luca", name: "Chef Luca", ratePerPortion: 4.0, specialty: "Italian comfort, made lighter", bio: "Ex-restaurant line cook. Knows how to hold pasta and sauces for five days." },
-  { id: "chef-priya", name: "Chef Priya", ratePerPortion: 3.0, specialty: "Vegetarian and curries", bio: "Plant-forward meal prep for students and shift workers." },
+// Creator chefs are coming soon: food creators people already follow, cooking their pod's 27 portions.
+// These are made-up example profiles for the preview, not real people.
+export type CreatorChef = { handle: string; name: string; niche: string; followers: string; fromPerPortion: number; hue: string };
+export const CREATOR_CHEFS: CreatorChef[] = [
+  { handle: "@proteinwithpri", name: "Pri", niche: "High-protein meal prep", followers: "48K", fromPerPortion: 3.5, hue: "#FF6FAE" },
+  { handle: "@sundaybatchsam", name: "Sam", niche: "Sunday batch cooking", followers: "112K", fromPerPortion: 4.0, hue: "#5B5CF0" },
+  { handle: "@plantplatesmo", name: "Mo", niche: "Plant-based bowls", followers: "27K", fromPerPortion: 3.0, hue: "#4FD987" },
 ];
 
 // Sample dishes in the same shape Claude returns. Macros are rough per-serving estimates for the demo.
@@ -63,9 +66,9 @@ export const SAMPLE_DISHES: Record<string, Dish> = {
   },
 };
 
-const DEMO_MEMBERS: { member: Member; goal: Goal; dish: keyof typeof SAMPLE_DISHES; vote: string }[] = [
-  { member: { userId: "demo-maya", name: "Maya" }, goal: { kind: "high-protein", minProteinG: 30 }, dish: "tikka", vote: "chef-amara" },
-  { member: { userId: "demo-dev", name: "Dev" }, goal: { kind: "calorie-target", dailyKcal: 1800, mealsPerDay: 3 }, dish: "chili", vote: "chef-luca" },
+const DEMO_MEMBERS: { member: Member; goal: Goal; dish: keyof typeof SAMPLE_DISHES }[] = [
+  { member: { userId: "demo-maya", name: "Maya" }, goal: { kind: "high-protein", minProteinG: 30 }, dish: "tikka" },
+  { member: { userId: "demo-dev", name: "Dev" }, goal: { kind: "calorie-target", dailyKcal: 1800, mealsPerDay: 3 }, dish: "chili" },
 ];
 
 // ---------- Service ----------
@@ -75,7 +78,7 @@ export const newCode = (rand = Math.random) => Array.from({ length: 6 }, () => C
 const newId = (rand = Math.random) => `pod${Date.now().toString(36)}${Math.floor(rand() * 1e6).toString(36)}`;
 
 export async function createPod(store: PodStore, user: Member, name: string): Promise<Pod> {
-  const pod: Pod = { id: newId(), code: newCode(), name: name.trim() || `${user.name}'s pod`, members: [user], votes: {} };
+  const pod: Pod = { id: newId(), code: newCode(), name: name.trim() || `${user.name}'s pod`, members: [user] };
   await store.create(pod);
   return pod;
 }
@@ -117,10 +120,12 @@ export async function submitDish(store: PodStore, podId: string, userId: string,
   await store.saveDish(podId, userId, { ...dish, memberId: userId, source });
 }
 
-export async function vote(store: PodStore, podId: string, userId: string, chefId: string) {
-  const { pod } = await memberState(store, podId, userId);
-  if (!CHEFS.some((c) => c.id === chefId)) throw new PodError("Unknown chef.", 404);
-  await store.saveVotes(podId, { ...pod.votes, [userId]: chefId });
+// Whoever does the shopping enters the receipt total, so the split uses what was really paid.
+export async function setReceipt(store: PodStore, podId: string, userId: string, total: unknown) {
+  await memberState(store, podId, userId);
+  if (total === null) return store.savePodFields(podId, { receiptTotal: null });
+  if (typeof total !== "number" || !(total > 0) || total > 5000) throw new PodError("Enter the receipt total in dollars, like 84.37.");
+  await store.savePodFields(podId, { receiptTotal: Math.round(total * 100) / 100 });
 }
 
 export type DishView = StoredDish & { by: string; conflicts: { member: string; reasons: string[] }[] };
@@ -129,19 +134,10 @@ export type PodView = {
   me: string;
   members: (Member & { goal: Goal | null; hasDish: boolean })[];
   dishes: DishView[];
-  chefs: (Chef & { votes: number; votedByMe: boolean })[];
-  chef: Chef | null;
+  creatorChefs: CreatorChef[];
   complete: boolean;
   swap: Swap | null;
 };
-
-// The chef is chosen once a majority (2 of 3) has voted for them.
-export function selectedChef(votes: Record<string, string>): Chef | null {
-  const counts = new Map<string, number>();
-  for (const c of Object.values(votes)) counts.set(c, (counts.get(c) ?? 0) + 1);
-  const winner = [...counts].find(([, n]) => n >= 2);
-  return winner ? CHEFS.find((c) => c.id === winner[0]) ?? null : null;
-}
 
 export async function viewPod(store: PodStore, podId: string, userId: string, prices: PriceTable): Promise<PodView> {
   const { pod, goals, dishes } = await memberState(store, podId, userId);
@@ -154,30 +150,27 @@ export async function viewPod(store: PodStore, podId: string, userId: string, pr
       .filter((c) => c.reasons.length);
     return { ...d, by: nameOf(m.userId), conflicts };
   });
-  const chef = selectedChef(pod.votes);
   const complete = pod.members.length === MEMBERS_PER_POD && dishViews.length === MEMBERS_PER_POD;
   return {
     pod,
     me: userId,
     members: pod.members.map((m) => ({ ...m, goal: goals[m.userId] ?? null, hasDish: !!dishes[m.userId] })),
     dishes: dishViews,
-    chefs: CHEFS.map((c) => ({ ...c, votes: Object.values(pod.votes).filter((v) => v === c.id).length, votedByMe: pod.votes[userId] === c.id })),
-    chef,
+    creatorChefs: CREATOR_CHEFS,
     complete,
-    swap: complete ? computeSwap(dishViews, prices, chef) : null,
+    swap: complete ? computeSwap(dishViews, prices, null, pod.receiptTotal ?? null) : null,
   };
 }
 
-// A pod with two members already done (goals, dishes, one chef vote each), so a new user
-// only has to set a goal, add a dish and cast the deciding vote.
+// A pod with two members already done (goals and dishes), so a new user only has to
+// set a goal and add a dish to see the whole swap.
 export async function seedDemoPod(store: PodStore, user: Member): Promise<Pod> {
-  const pod: Pod = { id: newId(), code: newCode(), name: "Sunday Swap (demo)", members: [...DEMO_MEMBERS.map((d) => d.member), user], votes: {} };
+  const pod: Pod = { id: newId(), code: newCode(), name: "Sunday Swap (demo)", members: [...DEMO_MEMBERS.map((d) => d.member), user] };
   await store.create(pod);
   for (const d of DEMO_MEMBERS) {
     await store.saveGoal(pod.id, d.member.userId, d.goal);
     await store.saveDish(pod.id, d.member.userId, { ...SAMPLE_DISHES[d.dish], memberId: d.member.userId, source: { kind: "sample" } });
   }
-  await store.saveVotes(pod.id, Object.fromEntries(DEMO_MEMBERS.map((d) => [d.member.userId, d.vote])));
   return pod;
 }
 
@@ -190,7 +183,7 @@ export class MemoryPodStore implements PodStore {
   async findByCode(code: string) { for (const s of this.pods.values()) if (s.pod.code === code) return structuredClone(s.pod); return null; }
   async listForUser(userId: string) { return [...this.pods.values()].filter((s) => s.pod.members.some((m) => m.userId === userId)).map((s) => structuredClone(s.pod)); }
   async saveMembers(id: string, members: Member[]) { this.pods.get(id)!.pod.members = structuredClone(members); }
-  async saveVotes(id: string, votes: Record<string, string>) { this.pods.get(id)!.pod.votes = { ...votes }; }
+  async savePodFields(id: string, fields: Partial<Pick<Pod, "receiptTotal" | "instacartUrl">>) { Object.assign(this.pods.get(id)!.pod, fields); }
   async saveGoal(id: string, userId: string, goal: Goal) { this.pods.get(id)!.goals[userId] = { ...goal }; }
   async saveDish(id: string, userId: string, dish: StoredDish) { this.pods.get(id)!.dishes[userId] = structuredClone(dish); }
 }

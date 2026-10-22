@@ -2,6 +2,12 @@
 
 Every fallback, blocker and non-obvious choice. Newest at the top.
 
+## 2026-10-22: Reel links, Instacart, creator chefs, real prices
+- **Reel link only:** the server fetches the video with Apify (no Instagram login), and Gemini watches it and writes the recipe (api/src/reel.ts). The caption is optional. Without Apify and Gemini keys it falls back to Claude reading a pasted caption.
+- **Add to Instacart:** Instacart's official Developer Platform API ("create shopping list page") turns the grocery list into an Instacart page link. The user signs in and checks out on Instacart; Pal never sees that login. Needs INSTACART_API_KEY (apply on Instacart's developer site). Built from Instacart's documented endpoint; not yet tested against Instacart.
+- **Prices:** Instacart's developer API builds the page but doesn't return prices to us, and scraping their prices would break their terms. So list prices are marked "~ estimate", Instacart shows the live prices, and the split uses the real receipt total once someone enters it.
+- **Chefs:** the voted chef is replaced by "Creator chefs, coming soon": food creators (Stan-store style profile cards) cooking a pod's 27 portions. Example profiles are made up. No chef fee in the split for now.
+
 ## 2026-10-21: Meal Prep Swap becomes the core flow
 - Pods of 3, one dish each, 27 portions cooked by one chef, 9 meals per member. All maths in `engine/swap.ts`; pod rules in `engine/pods.ts`. The same code runs on the server (SurrealDB) and in the app's demo mode (in memory).
 - Claude (`claude-opus-5-5`, structured JSON output, `fallbacks: "default"` so a declined request is retried on another model) extracts the dish name, per-serving ingredients, steps and macros. Vicente asked for Claude's macros, so CLAUDE.md rule 3 now has a written exception; the app labels them as estimates.

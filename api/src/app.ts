@@ -2,9 +2,10 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { screen, DECLINE_MESSAGE, type ScreeningAnswers } from "../../engine/screening.ts";
-import { createPod, joinPod, PodError, SAMPLE_DISHES, seedDemoPod, setGoal, submitDish, viewPod, vote, type PodStore } from "../../engine/pods.ts";
+import { createPod, joinPod, PodError, SAMPLE_DISHES, seedDemoPod, setGoal, setReceipt, submitDish, viewPod, type PodStore } from "../../engine/pods.ts";
 import type { PriceTable } from "../../engine/swap.ts";
 import type { Extractor } from "./extract.ts";
+import type { GroceryLine } from "../../engine/swap.ts";
 
 export type UserRow = { clerk_id: string; eligible: boolean | null };
 
@@ -18,6 +19,8 @@ export type Deps = {
   pods: PodStore;
   extract: Extractor;
   prices: PriceTable;
+  // Returns an Instacart shopping-page link for the list, or null when no Instacart key is set.
+  instacart: ((title: string, lines: GroceryLine[]) => Promise<string>) | null;
 };
 
 type Env = { Variables: { userId: string } };
@@ -87,7 +90,7 @@ export function createApp(deps: Deps) {
     return c.json(await viewPod(deps.pods, c.req.param("id"), c.get("userId"), deps.prices));
   });
 
-  // A reel link plus its caption, a screenshot, or one of the sample dishes. Claude reads the first two.
+  // A reel link (Pal watches the video; the caption is optional), a screenshot, or a sample dish.
   app.post("/v1/pods/:id/dish", async (c) => {
     const podId = c.req.param("id"), userId = c.get("userId");
     const body = (await c.req.json()) as Record<string, unknown>;
@@ -98,8 +101,7 @@ export function createApp(deps: Deps) {
     } else if (body.kind === "reel") {
       const url = String(body.url ?? "").trim(), caption = String(body.caption ?? "").trim();
       if (!/^https?:\/\//.test(url)) throw new PodError("Paste the reel's full link (it starts with https://).");
-      if (caption.length < 10) throw new PodError("Paste the reel's caption too. Pal reads the recipe from it.");
-      const dish = await deps.extract({ kind: "reel", url, caption: caption.slice(0, 8000) });
+      const dish = await deps.extract({ kind: "reel", url, caption: caption ? caption.slice(0, 8000) : undefined });
       await submitDish(deps.pods, podId, userId, dish, { kind: "reel", url, caption });
     } else if (body.kind === "screenshot") {
       const mediaType = String(body.mediaType);
@@ -112,10 +114,20 @@ export function createApp(deps: Deps) {
     return c.json(await viewPod(deps.pods, podId, userId, deps.prices));
   });
 
-  app.post("/v1/pods/:id/vote", async (c) => {
-    const { chefId } = (await c.req.json()) as { chefId?: string };
-    await vote(deps.pods, c.req.param("id"), c.get("userId"), String(chefId));
+  app.put("/v1/pods/:id/receipt", async (c) => {
+    const { total } = (await c.req.json()) as { total?: unknown };
+    await setReceipt(deps.pods, c.req.param("id"), c.get("userId"), total ?? null);
     return c.json(await viewPod(deps.pods, c.req.param("id"), c.get("userId"), deps.prices));
+  });
+
+  // Sends the pod's grocery list to Instacart and returns the shopping-page link.
+  app.post("/v1/pods/:id/instacart", async (c) => {
+    if (!deps.instacart) throw new PodError("Instacart isn't connected yet: the server needs an Instacart API key.", 409);
+    const view = await viewPod(deps.pods, c.req.param("id"), c.get("userId"), deps.prices);
+    if (!view.swap) throw new PodError("Add all 3 dishes first; then Pal can build the cart.");
+    const url = await deps.instacart(`${view.pod.name}: 27 portions`, view.swap.grocery);
+    await deps.pods.savePodFields(view.pod.id, { instacartUrl: url });
+    return c.json({ url });
   });
 
   return app;

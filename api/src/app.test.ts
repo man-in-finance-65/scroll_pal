@@ -21,6 +21,7 @@ function fakeDeps() {
     pods: new MemoryPodStore(),
     extract: async () => SAMPLE_DISHES.pesto,
     prices: PRICES,
+    instacart: null as Deps["instacart"],
   };
   return { deps, rows };
 }
@@ -67,22 +68,40 @@ test("demo pod runs to a full swap through the API", async () => {
   const app = createApp(fakeDeps().deps);
   const pod = await (await post(app, "/v1/pods/demo", { displayName: "Vicente" })).json();
   assert.equal((await post(app, `/v1/pods/${pod.id}/goal`, { goal: { kind: "high-protein", minProteinG: 35 } }, "PUT")).status, 200);
-  const afterDish = await (await post(app, `/v1/pods/${pod.id}/dish`, { kind: "reel", url: "https://www.instagram.com/reel/abc/", caption: "Creamy pesto pasta, serves 4..." })).json();
+  const afterDish = await (await post(app, `/v1/pods/${pod.id}/dish`, { kind: "reel", url: "https://www.instagram.com/reel/abc/" })).json();
   assert.equal(afterDish.complete, true);
-  const view = await (await post(app, `/v1/pods/${pod.id}/vote`, { chefId: "chef-amara" })).json();
-  assert.equal(view.chef.id, "chef-amara");
-  assert.equal(view.swap.totalPortions, 27);
-  assert.equal(view.swap.cost.perMember.length, 3);
+  assert.equal(afterDish.swap.totalPortions, 27);
+  const view = await (await post(app, `/v1/pods/${pod.id}/receipt`, { total: 90 }, "PUT")).json();
+  assert.deepEqual(view.swap.cost.perMember, [30, 30, 30]);
 });
-test("a reel without a caption is rejected before calling Claude", async () => {
+test("a reel needs a real link, checked before any AI call", async () => {
   let called = false;
   const { deps } = fakeDeps();
   deps.extract = async () => { called = true; return SAMPLE_DISHES.pesto; };
   const app = createApp(deps);
   const pod = await (await post(app, "/v1/pods", { name: "Test", displayName: "A" })).json();
-  const res = await post(app, `/v1/pods/${pod.id}/dish`, { kind: "reel", url: "https://www.instagram.com/reel/abc/", caption: "" });
+  const res = await post(app, `/v1/pods/${pod.id}/dish`, { kind: "reel", url: "not a link" });
   assert.equal(res.status, 400);
   assert.equal(called, false);
+});
+test("Add to Instacart sends the merged list and saves the link", async () => {
+  const { deps } = fakeDeps();
+  let sent: { title: string; n: number } | null = null;
+  deps.instacart = async (title, lines) => { sent = { title, n: lines.length }; return "https://www.instacart.com/store/shopping_lists/123"; };
+  const app = createApp(deps);
+  const pod = await (await post(app, "/v1/pods/demo", { displayName: "V" })).json();
+  assert.equal((await post(app, `/v1/pods/${pod.id}/instacart`, {})).status, 400); // only 2 dishes so far
+  await post(app, `/v1/pods/${pod.id}/dish`, { kind: "sample", sample: "pesto" });
+  const res = await (await post(app, `/v1/pods/${pod.id}/instacart`, {})).json();
+  assert.equal(res.url, "https://www.instacart.com/store/shopping_lists/123");
+  assert.equal(sent!.n, 17);
+});
+test("without an Instacart key the button explains what's missing", async () => {
+  const app = createApp(fakeDeps().deps);
+  const pod = await (await post(app, "/v1/pods/demo", { displayName: "V" })).json();
+  const res = await post(app, `/v1/pods/${pod.id}/instacart`, {});
+  assert.equal(res.status, 409);
+  assert.match((await res.json()).error, /Instacart API key/);
 });
 test("joining an unknown code returns 404 with a readable message", async () => {
   const res = await post(createApp(fakeDeps().deps), "/v1/pods/join", { code: "ZZZZZZ" });

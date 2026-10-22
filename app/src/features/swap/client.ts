@@ -1,11 +1,11 @@
 // How the app talks to pods. Live mode goes through our API (Claude + SurrealDB, signed in with Clerk).
 // Demo mode runs the exact same pod logic on the phone, in memory, with sample dishes.
 import prices from "../../../../data/prices.json";
-import { createPod, joinPod, MemoryPodStore, PodError, SAMPLE_DISHES, seedDemoPod, setGoal, submitDish, viewPod, vote, type Pod, type PodView } from "../../../../engine/pods.ts";
+import { createPod, joinPod, MemoryPodStore, PodError, SAMPLE_DISHES, seedDemoPod, setGoal, setReceipt, submitDish, viewPod, type Pod, type PodView } from "../../../../engine/pods.ts";
 import type { Goal, PriceTable } from "../../../../engine/swap.ts";
 
 export type DishInput =
-  | { kind: "reel"; url: string; caption: string }
+  | { kind: "reel"; url: string; caption?: string }
   | { kind: "screenshot"; mediaType: "image/jpeg"; data: string }
   | { kind: "sample"; sample: keyof typeof SAMPLE_DISHES };
 
@@ -18,7 +18,8 @@ export interface PodClient {
   get(id: string): Promise<PodView>;
   setGoal(id: string, goal: Goal): Promise<PodView>;
   submitDish(id: string, input: DishInput): Promise<PodView>;
-  vote(id: string, chefId: string): Promise<PodView>;
+  setReceipt(id: string, total: number | null): Promise<PodView>;
+  instacart(id: string): Promise<string>;
 }
 
 export function demoClient(): PodClient {
@@ -35,11 +36,12 @@ export function demoClient(): PodClient {
     get: view,
     setGoal: async (id, goal) => (await setGoal(store, id, me.userId, goal), view(id)),
     submitDish: async (id, input) => {
-      if (input.kind !== "sample") throw new PodError("This demo runs without the server, so Pal can't read reels or screenshots yet. Pick a sample dish.");
+      if (input.kind !== "sample") throw new PodError("This preview runs without the Pal server, so it can't watch reels yet. Pick a sample dish here; real reels work once the server keys are in.");
       await submitDish(store, id, me.userId, SAMPLE_DISHES[input.sample], { kind: "sample" });
       return view(id);
     },
-    vote: async (id, chefId) => (await vote(store, id, me.userId, chefId), view(id)),
+    setReceipt: async (id, total) => (await setReceipt(store, id, me.userId, total), view(id)),
+    instacart: async () => { throw new PodError("Add to Instacart works once the Pal server has an Instacart key. In this preview, use the list below."); },
   };
 }
 
@@ -64,6 +66,7 @@ export function liveClient(baseUrl: string, getToken: () => Promise<string | nul
     get: (id) => call(`/v1/pods/${id}`),
     setGoal: (id, goal) => call(`/v1/pods/${id}/goal`, "PUT", { goal }),
     submitDish: (id, input) => call(`/v1/pods/${id}/dish`, "POST", input),
-    vote: (id, chefId) => call(`/v1/pods/${id}/vote`, "POST", { chefId }),
+    setReceipt: (id, total) => call(`/v1/pods/${id}/receipt`, "PUT", { total }),
+    instacart: async (id) => (await call<{ url: string }>(`/v1/pods/${id}/instacart`, "POST", {})).url,
   };
 }

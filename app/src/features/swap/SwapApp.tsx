@@ -1,6 +1,6 @@
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Linking, Pressable, Text, TextInput, View } from "react-native";
 import type { Pod, PodView } from "../../../../engine/pods.ts";
 import { goalLabel, type Goal } from "../../../../engine/swap.ts";
 import { colors } from "../../lib/theme";
@@ -14,6 +14,7 @@ export function SwapApp({ client, onSolo }: { client: PodClient; onSolo?: () => 
   const [pod, setPod] = useState<PodView | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [swapTab, setSwapTab] = useState<SwapTab>("grocery");
 
   const run = useCallback(async <T,>(label: string, fn: () => Promise<T>): Promise<T | undefined> => {
     setBusy(label);
@@ -35,8 +36,19 @@ export function SwapApp({ client, onSolo }: { client: PodClient; onSolo?: () => 
 
   if (view.name === "goal") return <GoalScreen pod={pod} error={error} onBack={back} onSave={(g) => run("Saving your goal…", () => client.setGoal(pod.pod.id, g)).then((v) => update(v))} />;
   if (view.name === "dish") return <DishScreen mode={client.mode} error={error} onBack={back} onSubmit={(input) => run(input.kind === "sample" ? "Adding your dish…" : "Pal is reading your recipe…", () => client.submitDish(pod.pod.id, input)).then((v) => update(v))} />;
-  if (view.name === "chefs") return <ChefScreen pod={pod} error={error} onBack={back} onVote={(id) => run("Counting votes…", () => client.vote(pod.pod.id, id)).then((v) => update(v, "chefs"))} />;
-  if (view.name === "swap") return <SwapScreen pod={pod} onBack={back} />;
+  if (view.name === "chefs") return <ChefScreen pod={pod} onBack={back} />;
+  if (view.name === "swap")
+    return (
+      <SwapScreen
+        pod={pod}
+        error={error}
+        tab={swapTab}
+        setTab={setSwapTab}
+        onBack={back}
+        onReceipt={(t) => run("Updating the split…", () => client.setReceipt(pod.pod.id, t)).then((v) => update(v, "swap"))}
+        onInstacart={async () => { setError(null); try { const url = await client.instacart(pod.pod.id); await Linking.openURL(url); } catch (e) { setError(e instanceof Error ? e.message : String(e)); } }}
+      />
+    );
   return (
     <PodScreen
       pod={pod}
@@ -64,7 +76,7 @@ function Home({ client, error, onOpen, run, onSolo }: { client: PodClient; error
         <Text style={[s.sub, { textAlign: "center", fontSize: 17 }]}>Three friends, three dishes from your saved reels, one chef. Everyone takes home 9 meals.</Text>
       </View>
       <Button label="Try the demo pod" onPress={async () => { const p = await run("Setting up the demo pod…", () => client.demo()); if (p) onOpen(p); }} />
-      <Text style={[s.sub, { textAlign: "center", fontSize: 13, marginTop: -6 }]}>Maya and Dev are already in. Add your goal, your dish and your chef vote.</Text>
+      <Text style={[s.sub, { textAlign: "center", fontSize: 13, marginTop: -6 }]}>Maya and Dev are already in. Add your goal and your dish.</Text>
       {error && <ErrorText text={error} />}
 
       {pods.length > 0 && (
@@ -89,7 +101,7 @@ function Home({ client, error, onOpen, run, onSolo }: { client: PodClient; error
         <Input value={code} onChange={(t) => setCode(t.toUpperCase())} placeholder="6 letters, e.g. K7PQ2M" />
         <Button label="Join pod" variant="ghost" disabled={code.trim().length < 6} onPress={async () => { const p = await run("Joining…", () => client.join(code)); if (p) onOpen(p); }} />
       </Card>
-      {client.mode === "demo" && <Text style={[s.sub, { fontSize: 12, textAlign: "center" }]}>Demo mode: everything stays on this device. Reading real reels needs the Pal server.</Text>}
+      {client.mode === "demo" && <Text style={[s.sub, { fontSize: 12, textAlign: "center" }]}>Preview mode: everything stays on this device. Watching real reels and Add to Instacart need the Pal server.</Text>}
       {onSolo && <Pressable onPress={onSolo}><Text style={{ textAlign: "center", color: colors.violet, fontWeight: "600" }}>Or plan a solo week ›</Text></Pressable>}
     </Screen>
   );
@@ -104,14 +116,13 @@ function PodScreen({ pod, error, onHome, onRefresh, go }: { pod: PodView; error:
     : !mine.goal ? "Set your goal so Pal can flag dishes that don't fit it."
     : !mine.hasDish ? "Add your dish: a reel link with its caption, or a screenshot."
     : dishesIn < 3 ? "Waiting for the others' dishes."
-    : !pod.chef ? "Vote for a chef. Two votes pick one."
-    : "Your swap is ready.";
+    : "Your swap is ready. Send the list to Instacart.";
 
   return (
     <Screen>
       <Pressable onPress={onHome}><Text style={{ color: colors.violet, fontWeight: "700", fontSize: 16 }}>‹ All pods</Text></Pressable>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <Pal mood={pod.complete && pod.chef ? "excited" : "helping"} size={56} />
+        <Pal mood={pod.complete ? "excited" : "helping"} size={56} />
         <View style={{ flex: 1, gap: 2 }}>
           <Text style={[s.title, { fontSize: 24 }]}>{pod.pod.name}</Text>
           <Text style={s.sub}>{nextStep}</Text>
@@ -130,7 +141,7 @@ function PodScreen({ pod, error, onHome, onRefresh, go }: { pod: PodView; error:
           <Text style={{ color: colors.mint, fontWeight: "800", fontSize: 13, letterSpacing: 0.8 }}>SWAP READY</Text>
           <Text style={{ color: colors.white, fontSize: 20, fontWeight: "800" }}>27 portions · 9 meals each</Text>
           <Text style={{ color: "#B9BCD6" }}>
-            {pod.swap ? `${money(pod.swap.cost.perMember[0], pod.swap.cost.currency)} each${pod.chef ? ` with ${pod.chef.name}` : " before the chef's fee"} · grocery list, prep sheet and split ›` : ""}
+            {pod.swap ? `About ${money(pod.swap.cost.perMember[0], pod.swap.cost.currency)} each · grocery list, Instacart, prep sheet and split ›` : ""}
           </Text>
         </Pressable>
       )}
@@ -161,11 +172,16 @@ function PodScreen({ pod, error, onHome, onRefresh, go }: { pod: PodView; error:
       {pod.dishes.length > 0 && <Label>Dishes</Label>}
       {pod.dishes.map((d) => <DishCard key={d.memberId} dish={d} />)}
 
-      <Label>Chef</Label>
       <Pressable onPress={() => go("chefs")}>
-        <Card>
-          <Text style={{ fontSize: 17, fontWeight: "800", color: colors.text }}>{pod.chef ? `${pod.chef.name} is cooking` : "No chef picked yet"}</Text>
-          <Text style={{ color: colors.muted }}>{pod.chef ? `${money(pod.chef.ratePerPortion, "CAD")} a portion · tap to see votes ›` : `${Object.keys(pod.pod.votes).length} of 3 votes in · tap to vote ›`}</Text>
+        <Card style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View style={{ flexDirection: "row" }}>
+            {pod.creatorChefs.map((c, k) => <Avatar key={c.handle} name={c.name} hue={c.hue} size={34} style={{ marginLeft: k ? -10 : 0 }} />)}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 16, fontWeight: "800", color: colors.text }}>Creator chefs</Text>
+            <Text style={{ color: colors.muted }}>Your favourite food creators cook your pod's 27 portions</Text>
+          </View>
+          <Pill text="Soon" tone="muted" />
         </Card>
       </Pressable>
       <Button label="Refresh" variant="ghost" onPress={onRefresh} />
@@ -240,6 +256,7 @@ function DishScreen({ mode, error, onBack, onSubmit }: { mode: PodClient["mode"]
   const [tab, setTab] = useState<"reel" | "screenshot" | "sample">(mode === "demo" ? "sample" : "reel");
   const [url, setUrl] = useState("");
   const [caption, setCaption] = useState("");
+  const [showCaption, setShowCaption] = useState(false);
   const pick = async () => {
     const r = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], base64: true, quality: 0.6 });
     const a = r.canceled ? null : r.assets[0];
@@ -249,16 +266,22 @@ function DishScreen({ mode, error, onBack, onSubmit }: { mode: PodClient["mode"]
     <Screen>
       <Back onPress={onBack} />
       <Pal mood="listening" size={64} />
-      <Title sub="Pal turns it into ingredients per portion, steps and macros. The chef makes 9 portions of it.">Add your dish</Title>
+      <Title sub="Paste a reel link. Pal watches it and writes the ingredients per portion, the steps and the macros. Your pod makes 9 portions of it.">Add your dish</Title>
       <Chips options={[{ value: "reel", label: "Reel link" }, { value: "screenshot", label: "Screenshot" }, { value: "sample", label: "Sample dish" }]} value={tab} onChange={(t) => setTab(t as typeof tab)} />
       {tab === "reel" && (
         <>
           <Label>Reel link</Label>
           <Input value={url} onChange={setUrl} placeholder="https://www.instagram.com/reel/…" />
-          <Label>Caption</Label>
-          <Text style={[s.sub, { fontSize: 13 }]}>Pal can't watch the video, so paste the caption with the recipe. In Instagram: tap "more" under the reel, then copy.</Text>
-          <Input value={caption} onChange={setCaption} placeholder="Paste the caption here" multiline />
-          <Button label="Read this reel" disabled={!url.trim() || caption.trim().length < 10} onPress={() => onSubmit({ kind: "reel", url: url.trim(), caption })} />
+          <Text style={[s.sub, { fontSize: 13 }]}>Pal watches the video and writes the recipe. In Instagram: tap Share on the reel, then Copy link.</Text>
+          {showCaption ? (
+            <>
+              <Label>Caption (optional)</Label>
+              <Input value={caption} onChange={setCaption} placeholder="Paste the caption if it has the recipe" multiline />
+            </>
+          ) : (
+            <Pressable onPress={() => setShowCaption(true)}><Text style={{ color: colors.violet, fontWeight: "600" }}>+ Add the caption too (helps with amounts)</Text></Pressable>
+          )}
+          <Button label="Watch this reel" disabled={!/^https?:\/\//.test(url.trim())} onPress={() => onSubmit({ kind: "reel", url: url.trim(), caption: caption.trim() || undefined })} />
         </>
       )}
       {tab === "screenshot" && (
@@ -282,42 +305,51 @@ function DishScreen({ mode, error, onBack, onSubmit }: { mode: PodClient["mode"]
   );
 }
 
-// ---------- Chefs ----------
+// ---------- Creator chefs (coming soon) ----------
 
-function ChefScreen({ pod, error, onBack, onVote }: { pod: PodView; error: string | null; onBack: () => void; onVote: (id: string) => void }) {
+function ChefScreen({ pod, onBack }: { pod: PodView; onBack: () => void }) {
+  const [notify, setNotify] = useState<Set<string>>(new Set());
   return (
     <Screen>
       <Back onPress={onBack} />
-      <Title sub="One vote each. The first chef to get 2 votes cooks for the pod.">Pick your chef</Title>
-      {error && <ErrorText text={error} />}
-      {pod.chefs.map((c) => {
-        const chosen = pod.chef?.id === c.id;
+      <View style={{ backgroundColor: colors.navy, borderRadius: 24, padding: 22, gap: 8 }}>
+        <Text style={{ color: colors.mint, fontWeight: "800", letterSpacing: 1, fontSize: 13 }}>COMING SOON</Text>
+        <Text style={{ color: colors.white, fontSize: 28, fontWeight: "800", letterSpacing: -0.5 }}>Creator chefs</Text>
+        <Text style={{ color: "#B9BCD6", fontSize: 16, lineHeight: 22 }}>The creators whose reels you save, cooking your pod's 27 portions. Book them straight from their page, and they get paid for the recipes you already love.</Text>
+      </View>
+      {pod.creatorChefs.map((c) => {
+        const on = notify.has(c.handle);
         return (
-          <Card key={c.id} style={chosen ? { borderWidth: 2, borderColor: colors.mint } : undefined}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ fontSize: 19, fontWeight: "800", color: colors.text }}>{c.name}</Text>
-              {chosen ? <Pill text="Cooking for you" tone="good" /> : <Text style={{ color: colors.muted, fontWeight: "700" }}>{money(c.ratePerPortion, "CAD")}/portion</Text>}
-            </View>
-            <Text style={{ color: colors.violet, fontWeight: "700" }}>{c.specialty}</Text>
-            <Text style={{ color: colors.muted, lineHeight: 20 }}>{c.bio}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <View style={{ flexDirection: "row", gap: 6 }}>
-                {[0, 1, 2].map((k) => <View key={k} style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: k < c.votes ? colors.violet : "#E2E1F5" }} />)}
+          <Card key={c.handle} style={{ gap: 12 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+              <Avatar name={c.name} hue={c.hue} size={58} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <Text style={{ fontSize: 18, fontWeight: "800", color: colors.text }}>{c.handle}</Text>
+                <Text style={{ color: colors.muted }}>{c.niche} · {c.followers} followers</Text>
               </View>
-              <Text style={{ color: colors.muted, flex: 1 }}>{c.votes} vote{c.votes === 1 ? "" : "s"} · 27 portions = {money(c.ratePerPortion * 27, "CAD")}</Text>
-              <SmallButton label={c.votedByMe ? "Your vote" : "Vote"} primary={!c.votedByMe} onPress={() => onVote(c.id)} />
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1, backgroundColor: colors.surface, borderRadius: 14, padding: 12 }}>
+                <Text style={{ fontSize: 12, color: colors.muted, fontWeight: "600" }}>Pod cook-up</Text>
+                <Text style={{ fontSize: 16, fontWeight: "800", color: colors.text }}>from {money(c.fromPerPortion, "CAD")}/portion</Text>
+              </View>
+              <Pressable onPress={() => { const n = new Set(notify); on ? n.delete(c.handle) : n.add(c.handle); setNotify(n); }} style={{ flex: 1, borderRadius: 14, padding: 12, justifyContent: "center", alignItems: "center", backgroundColor: on ? colors.mint : c.hue }}>
+                <Text style={{ color: on ? colors.navy : colors.white, fontWeight: "800" }}>{on ? "✓ You're on the list" : "Notify me"}</Text>
+              </Pressable>
             </View>
           </Card>
         );
       })}
+      <Text style={[s.sub, { fontSize: 12, textAlign: "center" }]}>Example creator profiles for the preview.</Text>
     </Screen>
   );
 }
 
 // ---------- Swap ----------
 
-function SwapScreen({ pod, onBack }: { pod: PodView; onBack: () => void }) {
-  const [tab, setTab] = useState<"grocery" | "prep" | "cost" | "meals">("grocery");
+type SwapTab = "grocery" | "prep" | "cost" | "meals";
+function SwapScreen({ pod, error, tab, setTab, onBack, onReceipt, onInstacart }: { pod: PodView; error: string | null; tab: SwapTab; setTab: (t: SwapTab) => void; onBack: () => void; onReceipt: (t: number | null) => void; onInstacart: () => void }) {
+  const [receipt, setReceiptText] = useState(pod.pod.receiptTotal ? String(pod.pod.receiptTotal) : "");
   const swap = pod.swap!;
   const [got, setGot] = useState<Set<string>>(new Set());
   const cur = swap.cost.currency;
@@ -329,17 +361,23 @@ function SwapScreen({ pod, onBack }: { pod: PodView; onBack: () => void }) {
         <Pal mood="excited" size={56} />
         <View style={{ flex: 1 }}>
           <Text style={[s.title, { fontSize: 24 }]}>The swap</Text>
-          <Text style={s.sub}>{pod.chef ? `${pod.chef.name} cooks 27 portions in one session.` : "Pick a chef to add their fee to the split."}</Text>
+          <Text style={s.sub}>27 portions, one cook-up. Send the list to Instacart, then split what you paid.</Text>
         </View>
       </View>
       <View style={{ flexDirection: "row", gap: 10 }}>
         <Stat label="Portions" value="27" />
         <Stat label="Meals each" value="9" />
-        <Stat label="Each pays" value={money(swap.cost.perMember[pod.members.findIndex((m) => m.userId === pod.me)] ?? swap.cost.perMember[0], cur)} />
+        <Stat label={swap.cost.source === "receipt" ? "Each pays" : "Each, about"} value={money(swap.cost.perMember[pod.members.findIndex((m) => m.userId === pod.me)] ?? swap.cost.perMember[0], cur)} />
       </View>
       <Chips options={[{ value: "grocery", label: `Groceries · ${swap.grocery.length}` }, { value: "prep", label: "Prep sheet" }, { value: "cost", label: "Cost split" }, { value: "meals", label: "My 9 meals" }]} value={tab} onChange={(t) => setTab(t as typeof tab)} />
 
+      {error && <ErrorText text={error} />}
       {tab === "grocery" && (
+        <>
+        <Pressable onPress={onInstacart} style={({ pressed }) => ({ backgroundColor: "#0AAD0A", borderRadius: 16, padding: 16, alignItems: "center", opacity: pressed ? 0.85 : 1 })}>
+          <Text style={{ color: colors.white, fontWeight: "800", fontSize: 17 }}>Add all {swap.grocery.length} items to Instacart</Text>
+          <Text style={{ color: "#E2F7E2", fontSize: 13 }}>Opens Instacart with your list. You sign in and check out there.</Text>
+        </Pressable>
         <Card>
           <Label>Everything for 27 portions</Label>
           {swap.grocery.map((l) => {
@@ -354,11 +392,13 @@ function SwapScreen({ pod, onBack }: { pod: PodView; onBack: () => void }) {
                   {l.dishes.length > 1 && <Text style={{ fontSize: 12, color: colors.violet }}>Merged from {l.dishes.length} dishes</Text>}
                 </View>
                 <Text style={{ fontSize: 15, color: colors.text, fontWeight: "700" }}>{l.base === "count" ? `× ${l.display}` : l.display}</Text>
-                <Text style={{ fontSize: 13, color: colors.muted, width: 58, textAlign: "right" }}>{l.cost === null ? "no price" : money(l.cost, cur)}</Text>
+                <Text style={{ fontSize: 13, color: colors.muted, width: 58, textAlign: "right" }}>{l.cost === null ? "" : `~${money(l.cost, cur)}`}</Text>
               </Pressable>
             );
           })}
+          <Text style={{ color: colors.muted, fontSize: 12 }}>~ = estimate from typical Toronto prices. Instacart shows the real prices for your store.</Text>
         </Card>
+        </>
       )}
 
       {tab === "prep" && (
@@ -383,14 +423,18 @@ function SwapScreen({ pod, onBack }: { pod: PodView; onBack: () => void }) {
 
       {tab === "cost" && (
         <Card>
-          <Row label="Ingredients (from the price table)" value={money(swap.cost.ingredients, cur)} />
-          <Row label={pod.chef ? `${pod.chef.name}: 27 × ${money(pod.chef.ratePerPortion, cur)}` : "Chef (not picked yet)"} value={money(swap.cost.chef, cur)} />
-          <View style={{ height: 1, backgroundColor: "#ECEBFA" }} />
-          <Row label="Total" value={money(swap.cost.total, cur)} bold />
+          <Row label={swap.cost.source === "receipt" ? "Groceries (receipt)" : "Groceries (estimate)"} value={money(swap.cost.ingredients, cur)} bold />
           <Label>Split three ways</Label>
           {pod.members.map((m, k) => <Row key={m.userId} label={label(m, pod.me)} value={money(swap.cost.perMember[k], cur)} bold />)}
           <Text style={{ color: colors.muted, fontSize: 13 }}>That's {money(swap.cost.perMember[0] / 9, cur)} a meal. No payments in the app; settle up however your pod likes.</Text>
-          {swap.cost.unpriced.length > 0 && <Text style={{ color: colors.orange, fontSize: 13 }}>No price for: {swap.cost.unpriced.join(", ")}. Add them to data/prices.json.</Text>}
+          <View style={{ height: 1, backgroundColor: "#ECEBFA" }} />
+          <Label>{swap.cost.source === "receipt" ? "Receipt total" : "Did the shopping? Enter the receipt total"}</Label>
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            <View style={{ flex: 1 }}><Input value={receipt} onChange={setReceiptText} placeholder="e.g. 84.37" decimal /></View>
+            <SmallButton label="Split it" primary onPress={() => onReceipt(receipt ? Number(receipt) : null)} />
+          </View>
+          {swap.cost.source === "estimate" && <Text style={{ color: colors.muted, fontSize: 13 }}>Until then the split uses typical prices, so it's a ballpark, not a bill.</Text>}
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Creator chefs (coming soon) will add their fee here.</Text>
         </Card>
       )}
 
@@ -433,14 +477,14 @@ function Back({ onPress }: { onPress: () => void }) {
 function ErrorText({ text }: { text: string }) {
   return <Text style={{ color: "#C2185B", backgroundColor: "#FFE8F1", padding: 12, borderRadius: 12, overflow: "hidden" }}>{text}</Text>;
 }
-function Input({ value, onChange, placeholder, numeric, multiline }: { value: string; onChange: (t: string) => void; placeholder: string; numeric?: boolean; multiline?: boolean }) {
+function Input({ value, onChange, placeholder, numeric, decimal, multiline }: { value: string; onChange: (t: string) => void; placeholder: string; numeric?: boolean; decimal?: boolean; multiline?: boolean }) {
   return (
     <TextInput
       value={value}
-      onChangeText={(t) => onChange(numeric ? t.replace(/[^0-9]/g, "") : t)}
+      onChangeText={(t) => onChange(numeric ? t.replace(/[^0-9]/g, "") : decimal ? t.replace(/[^0-9.]/g, "") : t)}
       placeholder={placeholder}
       placeholderTextColor="#9A9DB8"
-      keyboardType={numeric ? "numeric" : "default"}
+      keyboardType={numeric ? "numeric" : decimal ? "decimal-pad" : "default"}
       autoCapitalize="none"
       multiline={multiline}
       style={{ backgroundColor: colors.white, borderWidth: 1, borderColor: "#E2E1F5", borderRadius: 14, padding: 14, fontSize: 16, color: colors.text, minHeight: multiline ? 120 : undefined, textAlignVertical: multiline ? "top" : "center" }}
@@ -465,6 +509,13 @@ function SmallButton({ label, onPress, primary }: { label: string; onPress: () =
     <Pressable onPress={onPress} style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12, backgroundColor: primary ? colors.violet : "transparent", borderWidth: 1.5, borderColor: colors.violet }}>
       <Text style={{ color: primary ? colors.white : colors.violet, fontWeight: "700" }}>{label}</Text>
     </Pressable>
+  );
+}
+function Avatar({ name, hue, size, style }: { name: string; hue: string; size: number; style?: object }) {
+  return (
+    <View style={[{ width: size, height: size, borderRadius: size / 2, backgroundColor: hue, alignItems: "center", justifyContent: "center", borderWidth: 2, borderColor: colors.white }, style]}>
+      <Text style={{ color: colors.white, fontWeight: "800", fontSize: size * 0.4 }}>{name[0]}</Text>
+    </View>
   );
 }
 function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {

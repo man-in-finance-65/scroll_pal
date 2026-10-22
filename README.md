@@ -5,10 +5,10 @@ A Pal that turns your doomscrolling into productivity: Pal turns your saved Inst
 Hackathon build. Submissions close **Sun Oct 25, 2026, 11:59 PM ET**.
 
 ## Meal Prep Swap
-Three friends form a pod with an invite code. Each sets a goal and adds one dish from a reel (link plus caption) or a screenshot; Claude turns it into a recipe. When all three dishes are in, a chef cooks 27 portions: everyone gets 3 of each dish, 9 meals. Pal builds the grocery list, the chef's prep sheet and the cost split, and the pod votes on a chef.
+Three friends form a pod with an invite code. Each sets a goal and pastes one reel link (Pal watches the video) or a screenshot. When all three dishes are in, the pod cooks 27 portions: everyone gets 3 of each dish, 9 meals. Pal builds the merged grocery list, sends it to Instacart, writes the prep sheet and splits the receipt three ways. Creator chefs are coming soon.
 
 ## Use it
-- **Demo, no setup:** open the app (or the web link) and tap **Try the demo pod**. Maya and Dev are already in; set your goal, add a dish, vote for a chef, then open **Swap ready**.
+- **Demo, no setup:** open the app (or the web link) and tap **Try the demo pod**. Maya and Dev are already in; set your goal, add a dish, then open **Swap ready**.
 - **On your phone:** `cd app && npm install && npx expo start`, then scan the QR code with Expo Go. With no keys it runs the demo.
 - **Live mode (real reels, shared pods):** fill in `ANTHROPIC_API_KEY`, the `SURREAL_*` lines and the Clerk keys in `.env`, run the schema in `api/db/schema.surql`, start the API (`cd api && npm run dev`), and set `EXPO_PUBLIC_API_URL` and `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` in `app/.env`.
 
@@ -16,9 +16,10 @@ Three friends form a pod with an invite code. Each sets a goal and adds one dish
 | To change | Edit |
 | :- | :- |
 | Grocery prices | `data/prices.json` |
-| Chefs, demo members, sample dishes | `CHEFS`, `DEMO_MEMBERS`, `SAMPLE_DISHES` in `engine/pods.ts` |
+| Creator chefs, demo members, sample dishes | `CREATOR_CHEFS`, `DEMO_MEMBERS`, `SAMPLE_DISHES` in `engine/pods.ts` |
 | Portions (3 per member, 27 total), goal rules, prep-sheet order, cost split | `engine/swap.ts` |
-| What Claude extracts and how | `api/src/extract.ts` |
+| How Pal watches a reel | `api/src/reel.ts` (Apify + Gemini); captions and screenshots in `api/src/extract.ts` (Claude) |
+| Instacart list | `api/src/instacart.ts` |
 | Screens and wording | `app/src/features/swap/SwapApp.tsx` |
 | Colours | `app/src/lib/theme.ts` |
 Run `npm test` after a change; the tests cover the swap maths.
@@ -46,9 +47,9 @@ Run `npm test` after a change; the tests cover the swap maths.
 | B filter test | `npm run gate:b -- --file reels.not-food.txt --expect-none` | ready |
 | B and C unit tests | `npm test` | 36 pass |
 
-| Swap + engine tests | `npm test` | 64 pass |
+| Swap + engine tests | `npm test` | 66 pass |
 | A App shell | see `docs/GATE_A_PHONE.md` | built, needs keys and a phone |
-| API tests | `cd api && npm test` | 9 pass |
+| API tests | `cd api && npm test` | 11 pass |
 
 Other gates are added here as they are built.
 

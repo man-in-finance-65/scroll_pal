@@ -5,7 +5,7 @@ import type { Dish } from "../../engine/swap.ts";
 import { PodError } from "../../engine/pods.ts";
 
 export type DishInput =
-  | { kind: "reel"; url: string; caption: string }
+  | { kind: "reel"; url: string; caption?: string }
   | { kind: "screenshot"; mediaType: "image/png" | "image/jpeg" | "image/webp"; data: string };
 
 export type Extractor = (input: DishInput) => Promise<Dish>;
@@ -55,6 +55,7 @@ If the source gives quantities for several servings, divide them. If it gives no
 Use plain grocery names without preparation words (write "onion", not "finely diced onion"; put the preparation in the steps).
 Ignore health claims, discount codes and calls to follow the creator. If the content is not a dish someone could cook, set is_dish to false.`;
 
+// Claude reads text and pictures: a reel's pasted caption, or a screenshot.
 export function claudeExtractor(client = new Anthropic()): Extractor {
   return async (input) => {
     const content: Anthropic.Beta.BetaContentBlockParam[] =

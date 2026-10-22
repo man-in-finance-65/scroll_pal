@@ -148,17 +148,18 @@ export function groceryList(dishes: Dish[], prices: PriceTable): GroceryLine[] {
 
 // ---------- Cost split ----------
 
-export type CostSplit = { ingredients: number; chef: number; total: number; perMember: number[]; unpriced: string[]; currency: string };
+// "estimate" = from data/prices.json; "receipt" = what the shopper actually paid.
+export type CostSplit = { ingredients: number; chef: number; total: number; perMember: number[]; unpriced: string[]; currency: string; source: "estimate" | "receipt" };
 
-export function costSplit(grocery: GroceryLine[], chef: Chef | null, currency: string): CostSplit {
+export function costSplit(grocery: GroceryLine[], chef: Chef | null, currency: string, receiptTotal: number | null = null): CostSplit {
   const cents = (n: number) => Math.round(n * 100);
-  const ingredients = cents(grocery.reduce((t, l) => t + (l.cost ?? 0), 0));
+  const ingredients = receiptTotal !== null ? cents(receiptTotal) : cents(grocery.reduce((t, l) => t + (l.cost ?? 0), 0));
   const chefCost = chef ? cents(chef.ratePerPortion * TOTAL_PORTIONS) : 0;
   const total = ingredients + chefCost;
   // Split to the cent; any leftover cents go to the first members so the shares add up exactly.
   const base = Math.floor(total / MEMBERS_PER_POD);
   const perMember = Array.from({ length: MEMBERS_PER_POD }, (_, k) => (base + (k < total - base * MEMBERS_PER_POD ? 1 : 0)) / 100);
-  return { ingredients: ingredients / 100, chef: chefCost / 100, total: total / 100, perMember, unpriced: grocery.filter((l) => l.cost === null).map((l) => l.name), currency };
+  return { ingredients: ingredients / 100, chef: chefCost / 100, total: total / 100, perMember, unpriced: receiptTotal !== null ? [] : grocery.filter((l) => l.cost === null).map((l) => l.name), currency, source: receiptTotal !== null ? "receipt" : "estimate" };
 }
 
 // ---------- Chef prep sheet ----------
@@ -236,13 +237,13 @@ export function prepSheet(dishes: Dish[], prices: PriceTable): PrepStep[] {
 
 export type Swap = { grocery: GroceryLine[]; prep: PrepStep[]; cost: CostSplit; portionsPerDish: number; totalPortions: number; mealsPerMember: number };
 
-export function computeSwap(dishes: Dish[], prices: PriceTable, chef: Chef | null): Swap {
+export function computeSwap(dishes: Dish[], prices: PriceTable, chef: Chef | null, receiptTotal: number | null = null): Swap {
   if (dishes.length !== MEMBERS_PER_POD) throw new Error(`a swap needs ${MEMBERS_PER_POD} dishes, got ${dishes.length}`);
   const grocery = groceryList(dishes, prices);
   return {
     grocery,
     prep: prepSheet(dishes, prices),
-    cost: costSplit(grocery, chef, prices.currency),
+    cost: costSplit(grocery, chef, prices.currency, receiptTotal),
     portionsPerDish: PORTIONS_PER_DISH,
     totalPortions: TOTAL_PORTIONS,
     mealsPerMember: PORTIONS_PER_MEMBER_PER_DISH * MEMBERS_PER_POD,

@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { canonicalName, costSplit, dishPhases, goalConflicts, groceryList, prepSheet, toBase, type Dish, type PriceTable } from "./swap.ts";
-import { CHEFS, MemoryPodStore, PodError, SAMPLE_DISHES, joinPod, createPod, seedDemoPod, selectedChef, setGoal, submitDish, viewPod, vote } from "./pods.ts";
+import { MemoryPodStore, PodError, SAMPLE_DISHES, joinPod, createPod, seedDemoPod, setGoal, setReceipt, submitDish, viewPod } from "./pods.ts";
 
 const PRICES: PriceTable = JSON.parse(readFileSync("data/prices.json", "utf8"));
 const { tikka, chili, pesto } = SAMPLE_DISHES;
@@ -58,7 +58,7 @@ test("unknown ingredients stay on the list without a price", () => {
 // Cost split
 test("cost split: ingredients plus 27 portions at the chef's rate, divided by 3 to the cent", () => {
   const list = groceryList([tikka, chili, pesto], PRICES);
-  const split = costSplit(list, CHEFS[0], "CAD");
+  const split = costSplit(list, { id: "x", name: "X", ratePerPortion: 3.5, bio: "", specialty: "" }, "CAD");
   assert.equal(split.chef, 94.5); // 27 x 3.50
   assert.equal(Math.round((split.perMember[0] + split.perMember[1] + split.perMember[2]) * 100), Math.round(split.total * 100));
   const cents = split.perMember.map((n) => Math.round(n * 100));
@@ -102,21 +102,25 @@ test("bad goals are rejected", async () => {
   const pod = await createPod(store, { userId: "a", name: "A" }, "Test");
   await assert.rejects(setGoal(store, pod.id, "a", { kind: "high-protein", minProteinG: -5 }));
 });
-test("a chef is selected once 2 of 3 vote for them", () => {
-  assert.equal(selectedChef({ a: "chef-amara", b: "chef-luca" }), null);
-  assert.equal(selectedChef({ a: "chef-amara", b: "chef-luca", c: "chef-amara" })?.id, "chef-amara");
+test("a receipt total replaces the estimate and splits to the cent", () => {
+  const split = costSplit(groceryList([tikka, chili, pesto], PRICES), null, "CAD", 100);
+  assert.equal(split.source, "receipt");
+  assert.deepEqual(split.perMember, [33.34, 33.33, 33.33]);
 });
-test("demo pod: goal, dish and one vote complete the swap", async () => {
+test("demo pod: a goal and a dish complete the swap; a receipt makes the split real", async () => {
   const store = new MemoryPodStore();
   const pod = await seedDemoPod(store, { userId: "me", name: "Me" });
   let view = await viewPod(store, pod.id, "me", PRICES);
   assert.equal(view.complete, false);
   await setGoal(store, pod.id, "me", { kind: "vegetarian" });
   await submitDish(store, pod.id, "me", pesto, { kind: "sample" });
-  await vote(store, pod.id, "me", "chef-luca");
   view = await viewPod(store, pod.id, "me", PRICES);
   assert.equal(view.complete, true);
-  assert.equal(view.chef?.id, "chef-luca");
+  assert.equal(view.swap!.cost.source, "estimate");
+  assert.equal(view.swap!.cost.chef, 0); // creator chefs are coming soon
+  await setReceipt(store, pod.id, "me", 91.2);
+  assert.equal((await viewPod(store, pod.id, "me", PRICES)).swap!.cost.total, 91.2);
+  await assert.rejects(setReceipt(store, pod.id, "me", -3));
   assert.equal(view.swap!.totalPortions, 27);
   assert.equal(view.swap!.mealsPerMember, 9);
   assert.ok(view.dishes.find((d) => d.name === pesto.name)!.conflicts.some((c) => c.member === "Maya"));

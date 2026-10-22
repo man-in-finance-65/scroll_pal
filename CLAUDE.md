@@ -11,7 +11,7 @@ The builder (Vicente) is a business/finance person, not an engineer. Explain any
 - Roles are not assigned yet. Do not assume who owns a gate.
 
 ## Core flow: Meal Prep Swap (Oct 21)
-Pods of 3 (invite code). Each member sets a goal and submits one dish (reel link + caption, or screenshot), which Claude turns into JSON. Once all 3 dishes are in: each member gets 3 portions of each dish (9 meals), the chef cooks 27 portions, and code builds the merged grocery list, the chef's prep sheet and the cost split (data/prices.json + chef rate, divided by 3). The pod votes on one of 3 seeded chefs. No payments. Logic: engine/swap.ts, engine/pods.ts. The earlier solo weekly plan is still reachable from the home screen.
+Pods of 3 (invite code). Each member sets a goal and submits one dish (reel link + caption, or screenshot), which Claude turns into JSON. Once all 3 dishes are in: each member gets 3 portions of each dish (9 meals), 27 portions are cooked in one session, and code builds the merged grocery list, the prep sheet and the cost split (estimate from data/prices.json until someone enters the real receipt total, divided by 3). "Add to Instacart" sends the list to Instacart's official API. Reel links: Apify fetches the video, Gemini watches it. Creator chefs (influencer, Stan-store vibe) are "Coming soon". No payments. Logic: engine/swap.ts, engine/pods.ts. The earlier solo weekly plan is still reachable from the home screen.
 
 ## Stack (do not substitute without asking)
 - **Expo (React Native, TypeScript, Expo Router)**: one codebase for iPhone and Android; share extension lets Pal receive reels from Instagram. Needs a development build (not Expo Go).
