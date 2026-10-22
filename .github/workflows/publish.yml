@@ -23,7 +23,7 @@ jobs:
         run: |
           code=$(curl -s -o /dev/null -w '%{http_code}' -H "x-goog-api-key: $EXPO_PUBLIC_GEMINI_API_KEY" https://generativelanguage.googleapis.com/v1beta/models)
           echo "Gemini key check: HTTP $code (length ${#EXPO_PUBLIC_GEMINI_API_KEY})"
-          [ "$code" = "200" ]
+          [ "$code" = "200" ] || echo "::warning::GEMINI_TOKEN looks invalid; the app will need a key typed into Settings"
       - name: Who am I
         run: npx -y eas-cli@latest whoami
       - name: Link EAS project

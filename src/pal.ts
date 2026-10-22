@@ -1,6 +1,11 @@
 import { PalResult } from './types';
 
-const MODEL = 'gemini-flash-latest';
+// Tried in order; busy or rate-limited models fall through to the next one.
+const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+const ROUNDS = 3;
+const RETRYABLE = new Set([429, 500, 502, 503, 504]);
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 const PROMPT = `You are Pal, an assistant that turns social media reels into real-world action.
 The user saved a reel. From the caption, link and/or screenshot, produce:
@@ -39,20 +44,32 @@ export async function askPal({ apiKey, url, caption, image }: PalInput): Promise
   if (caption) parts.push({ text: `Caption / notes: ${caption}` });
   if (image) parts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } });
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify({
-        contents: [{ role: 'user', parts }],
-        generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA },
-      }),
-    },
-  );
-  const body = await res.json();
-  if (!res.ok) throw new Error(body?.error?.message ?? `Gemini error ${res.status}`);
-  const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Pal returned an empty answer. Try adding the caption.');
-  return JSON.parse(text);
+  const payload = JSON.stringify({
+    contents: [{ role: 'user', parts }],
+    generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA },
+  });
+
+  let lastError = 'Gemini is busy. Try again in a minute.';
+  for (let round = 0; round < ROUNDS; round++) {
+    for (const model of MODELS) {
+      const res = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+          body: payload,
+        },
+      );
+      const body = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!text) throw new Error('Pal returned an empty answer. Try adding the caption.');
+        return JSON.parse(text);
+      }
+      lastError = body?.error?.message ?? `Gemini error ${res.status}`;
+      if (!RETRYABLE.has(res.status) && res.status !== 404) throw new Error(lastError);
+    }
+    await sleep(1500 * (round + 1));
+  }
+  throw new Error(lastError);
 }
