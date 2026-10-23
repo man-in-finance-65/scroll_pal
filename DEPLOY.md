@@ -11,6 +11,18 @@ Run a workflow by hand: GitHub → **Actions** → pick it → **Run workflow**.
 
 ---
 
+## Web and Android (same code as the phone app)
+
+One React Native codebase in `app/` runs on iPhone, Android and the web.
+
+- **Try the web version locally:** `cd app && npx expo start --web`
+- **Make the web files:** `cd app && npm run build:web` (puts a ready-to-host site in `app/dist`)
+- **Host it with Expo (EAS Hosting):** `cd app && npm run deploy:web` (needs `EXPO_TOKEN`, or `npx eas-cli login` once). Set `EXPO_PUBLIC_API_URL` to the Cloud Run address first, same as for the phone app.
+- **Android APK (installable file):** `cd app && npx eas-cli build --platform android --profile apk`
+- On the web, phone-only extras (vibration, reminders) quietly do nothing; everything else works.
+
+---
+
 ## 1. The app (Expo Go): already working
 
 Every push that touches `app/` publishes to the Expo project **scroll-pal**, branch **v1**.
