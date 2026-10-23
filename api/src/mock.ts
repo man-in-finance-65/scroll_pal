@@ -28,6 +28,25 @@ export const MOCK_RECIPE: Recipe = {
   confidence: 0.82,
 };
 
+// Used when there is no Anthropic key: a simple plan built by plain code, no AI.
+export function simplePlan(recipe: Recipe, goal: string, days: number): Plan {
+  const extra =
+    goal === "bulk" ? "Add a bigger portion of the carb." : goal === "cut" ? "Go lighter on the carb, more veg." : "Keep the portion as written.";
+  const lunches = ["Greek yogurt, berries and oats", "Eggs on toast with fruit", "A big salad with a protein you like", "Sandwich or wrap with a side of veg"];
+  return {
+    summary: `${days}-day ${goal} plan around ${recipe.title}.`,
+    days: Array.from({ length: days }, (_, i) => ({
+      day: i + 1,
+      slots: [
+        { slot: "lunch" as const, meal: lunches[i % lunches.length], kind: "simple" as const, note: "Quick and easy." },
+        i % 2 === 0
+          ? { slot: "dinner" as const, meal: recipe.title, kind: "cook" as const, note: extra }
+          : { slot: "dinner" as const, meal: `Leftover ${recipe.title}`, kind: "leftovers" as const, note: "Reheat last night's batch." },
+      ],
+    })),
+  };
+}
+
 export function mockPlan(goal: string, days: number): Plan {
   const extra =
     goal === "bulk" ? "Add a second scoop of rice." : goal === "cut" ? "Swap half the rice for extra cucumber." : "Keep the portion as written.";

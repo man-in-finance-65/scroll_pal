@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Pal } from "../components/Pal";
 import { Button, Card, haptic, NumberCard, Screen, Segmented } from "../components/ui";
+import { fx } from "../lib/fx";
 import { api, ApiError } from "../lib/api";
 import { est, num, qtyText } from "../lib/format";
 import { useStore } from "../lib/store";
@@ -43,10 +44,10 @@ export default function RecipeScreen() {
     try {
       const plan = await api.plan(r!, s.goal, days);
       s.savePlan(plan, r!, s.goal, days);
-      haptic.success();
+      fx.ready();
       router.dismissTo("/plan"); // pop back to the tabs and switch to Plan
     } catch (e) {
-      haptic.warn();
+      fx.error();
       setError((e as ApiError).message);
     } finally {
       setBusy(false);

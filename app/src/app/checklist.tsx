@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from "react-native";
-import { Card, haptic, Screen } from "../components/ui";
+import { Card, Screen } from "../components/ui";
+import { fx } from "../lib/fx";
 import { useStore } from "../lib/store";
 import { brand, space, type, useTheme } from "../lib/theme";
 
@@ -36,7 +37,7 @@ export default function Checklist() {
           {s.checklist.map((c, i) => (
             <Pressable
               key={i}
-              onPress={() => { haptic.tap(); s.toggleItem(i); }}
+              onPress={() => { if (!c.checked) fx.tick(); else fx.tap(); s.toggleItem(i); }}
               style={{ flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: t.line }}
             >
               <View

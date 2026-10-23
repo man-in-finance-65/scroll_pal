@@ -3,7 +3,8 @@ import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withSpring, withTiming } from "react-native-reanimated";
 import { Pal } from "../../components/Pal";
-import { Button, Card, haptic, NumberCard, Screen, Title } from "../../components/ui";
+import { Button, Card, NumberCard, Screen, Title } from "../../components/ui";
+import { fx } from "../../lib/fx";
 import type { PalState } from "../../lib/mood";
 import { notifyNow } from "../../lib/notify";
 import { useStore } from "../../lib/store";
@@ -52,7 +53,7 @@ export default function PlanScreen() {
 
   async function confirm() {
     const n = s.confirmPlan();
-    haptic.success();
+    fx.ready();
     await notifyNow("Cart ready", `${n} items`);
     router.push("/checklist");
   }
@@ -60,13 +61,13 @@ export default function PlanScreen() {
   function onDone(slot: PlanSlot) {
     const res = s.completeSlot(slot.id);
     if (!res) return;
-    if (res.leveledUp) haptic.levelUp();
-    else haptic.success();
+    if (res.leveledUp) fx.levelUp();
+    else fx.done();
     setCheer(true);
   }
 
   function onSkip(slot: PlanSlot) {
-    haptic.warn();
+    fx.skip();
     s.skipSlot(slot.id);
   }
 

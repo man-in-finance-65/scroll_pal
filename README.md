@@ -36,7 +36,7 @@ npm run dev                    # prints "Pal API listening on :8080"
    cp ../.env.example .env   # set EXPO_PUBLIC_API_URL=http://192.168.x.x:8080 (or your Cloud Run URL)
    npx expo start
    ```
-4. Scan the QR code with your phone camera (iPhone) or Expo Go (Android). Phone and laptop must be on the same Wi-Fi.
+4. Open the printed link or scan the QR code with your phone camera (iPhone) or Expo Go (Android). Phone and laptop must be on the same Wi-Fi.
 
 ## 3. Tests
 
@@ -62,4 +62,8 @@ Start over: Passport tab → *Start over*.
 
 ## 4. Deploy and share
 
-See **DEPLOY.md**.
+See **DEPLOY.md**. It covers the app (Expo Go), the API + landing page (Cloud Run), and the hidden Google Sheet.
+
+## Landing page
+
+`api/landing/` is the "Do you want to be Pal's pal?" page, served at the API's address. A yes is counted in the private sheet, then the visitor is sent to the app in Expo Go. Edit `api/landing/config.json` to change where "Open ScrollPal" points.

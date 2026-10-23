@@ -3,6 +3,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Celebration } from "../components/Celebration";
+import { initFx } from "../lib/fx";
 import { setupNotifications } from "../lib/notify";
 import { StoreProvider } from "../lib/store";
 import { useTheme } from "../lib/theme";
@@ -25,7 +26,10 @@ function Root() {
 }
 
 export default function Layout() {
-  useEffect(setupNotifications, []);
+  useEffect(() => {
+    setupNotifications();
+    initFx();
+  }, []);
   return (
     <SafeAreaProvider>
       <StoreProvider>

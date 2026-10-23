@@ -32,13 +32,19 @@
         {
           "color": "#6C5CE7"
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": false
     },
     "runtimeVersion": {
       "policy": "sdkVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "79b48e89-9dc9-4e6f-9e1a-183307fbc025"
+      }
     }
   }
 }

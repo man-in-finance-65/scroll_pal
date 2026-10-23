@@ -3,6 +3,7 @@ import { useEffect, useRef } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { stampEmoji } from "../lib/cuisine";
+import { fx } from "../lib/fx";
 import { useStore } from "../lib/store";
 import { brand, radius, space, type, useTheme } from "../lib/theme";
 import { usePal } from "../lib/usePal";
@@ -30,13 +31,19 @@ export function Celebration() {
     scale.value = 0.6;
     fade.value = withTiming(1, { duration: 180 });
     scale.value = withSpring(1, { damping: 9, stiffness: 160 });
+    // A new stamp lands just after the "nice" of the Done tap. A level-up already played its fanfare.
+    if (c.kind === "stamp") {
+      const id = setTimeout(fx.stamp, 450);
+      return () => clearTimeout(id);
+    }
   }, [c]);
 
-  const opened = useRef(false);
+  const opened = useRef(0);
   useEffect(() => {
-    if (c || !s.feedbackPending || opened.current) return;
-    opened.current = true;
-    const id = setTimeout(() => router.push("/feedback"), 600);
+    if (c || !s.feedbackPending || opened.current === s.feedbackPending) return;
+    opened.current = s.feedbackPending;
+    const m = s.feedbackPending;
+    const id = setTimeout(() => router.push({ pathname: "/feedback", params: { m: String(m) } }), 600);
     return () => clearTimeout(id);
   }, [c, s.feedbackPending]);
 

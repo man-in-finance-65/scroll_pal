@@ -1,27 +1,14 @@
-import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useId, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
 import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
 import { brand, radius, space, type, useTheme } from "../lib/theme";
 
-// Haptics do nothing on web; never let them throw.
-export const haptic = {
-  tap: () => Platform.OS !== "web" && Haptics.selectionAsync().catch(() => {}),
-  success: () => Platform.OS !== "web" && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}),
-  warn: () => Platform.OS !== "web" && Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}),
-  levelUp: async () => {
-    if (Platform.OS === "web") return;
-    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-    for (const s of [Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium, Haptics.ImpactFeedbackStyle.Heavy]) {
-      await Haptics.impactAsync(s).catch(() => {});
-      await wait(90);
-    }
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-  },
-};
+// Sound + vibration live in lib/fx.ts. Re-exported so screens keep one import.
+import { haptic } from "../lib/fx";
+export { haptic };
 
 export function Screen({ children, scroll = true, padTop = true }: { children: ReactNode; scroll?: boolean; padTop?: boolean }) {
   const t = useTheme();

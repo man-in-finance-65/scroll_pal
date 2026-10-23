@@ -1,14 +1,15 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Pressable, Switch, Text, View } from "react-native";
 import { Pal } from "../../components/Pal";
 import { Bar, Button, Card, FadeIn, haptic, NumberCard, Ring, Screen, Segmented } from "../../components/ui";
+import { fx, setPref, useFxPrefs } from "../../lib/fx";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
 import type { Goal } from "../../lib/types";
 import { usePal } from "../../lib/usePal";
-import { COOK_XP, nextLevelHint, xpMath } from "../../lib/xp";
+import { COOK_XP, nextLevelHint, SHARE_CAP_PER_DAY, SHARE_XP, XP_PER_LEVEL, xpMath } from "../../lib/xp";
 
 const GOALS: { value: Goal; label: string }[] = [
   { value: "bulk", label: "Bulk" },
@@ -25,6 +26,7 @@ export default function PalHome() {
   const t = useTheme();
   const s = useStore();
   const pal = usePal();
+  const prefs = useFxPrefs();
   const [poke, setPoke] = useState(false);
   useEffect(() => {
     if (!poke) return;
@@ -46,7 +48,7 @@ export default function PalHome() {
       </View>
 
       <View style={{ alignItems: "center", gap: space.md }}>
-        <Pressable onPress={() => { haptic.tap(); setPoke(true); }} accessibilityLabel="Poke Pal">
+        <Pressable onPress={() => { fx.done(); setPoke(true); }} accessibilityLabel="Poke Pal">
           <Pal state={state} size={230} body={pal.body} level={p.level} energy={pal.mood.energy} />
         </Pressable>
         <Card style={{ alignSelf: "stretch", alignItems: "center", paddingVertical: space.md }}>
@@ -54,9 +56,15 @@ export default function PalHome() {
         </Card>
       </View>
 
-      {!s.recipe && (
+      {!s.recipe && s.progress.cooks === 0 && (
         <FadeIn>
-          <Button title="Paste your first cooking video" onPress={() => router.navigate("/add")} />
+          <Card>
+            <Text style={[type.h2, { color: t.text }]}>How it works</Text>
+            <Step n={1} title="Paste a cooking video" body="Any YouTube Short. Pal watches it and writes the recipe." />
+            <Step n={2} title="Pick a plan" body="Bulk, cut or maintain. Pal plans your meals." />
+            <Step n={3} title="Cook it, tap Done" body="Pal cheers, and levels up when you really cook." />
+            <Button title="Paste your first video" onPress={() => router.navigate("/add")} style={{ marginTop: space.sm }} />
+          </Card>
         </FadeIn>
       )}
 
@@ -106,7 +114,65 @@ export default function PalHome() {
         <Segmented options={GOALS} value={s.goal} onChange={s.setGoal} />
         <Text style={[type.caption, { color: t.sub }]}>{GOAL_LINE[s.goal]}</Text>
       </Card>
+      <Card>
+        <Text style={[type.h2, { color: t.text }]}>How points work</Text>
+        <Rule plus={`+${COOK_XP} XP`} color={brand.orange} title="Finish a cook" body="Tap Done on a meal you really made." />
+        <Rule plus={`+${SHARE_XP} XP`} color={brand.blue} title="Add a recipe" body={`Only the first ${SHARE_CAP_PER_DAY} each day count.`} />
+        <Rule plus={`${XP_PER_LEVEL} XP`} color={brand.violet} title="Next level" body="Every 30 XP, but only finishing a cook can level Pal up. Adding recipes alone never will." />
+        <Text style={[type.caption, { color: t.sub }]}>Skipping a cook never costs you XP or a level. Pal just gets sleepy until your next cook.</Text>
+      </Card>
+
+      <Card>
+        <Text style={[type.h2, { color: t.text }]}>Got advice for me, pal?</Text>
+        <Text style={[type.caption, { color: t.sub }]}>Tell me what's good, what's confusing, or what I should learn next. I read every one.</Text>
+        <Button title="Talk to Pal" kind="secondary" onPress={() => router.push({ pathname: "/feedback", params: { m: "0" } })} />
+      </Card>
+
+      <Card style={{ gap: 0 }}>
+        <ToggleRow label="Sounds" value={prefs.sound} onChange={(v) => { setPref("sound", v); if (v) fx.tick(); }} />
+        <ToggleRow label="Vibrations" value={prefs.vibration} onChange={(v) => { setPref("vibration", v); if (v) haptic.pop(); }} last />
+      </Card>
     </Screen>
+  );
+}
+
+function Step({ n, title, body }: { n: number; title: string; body: string }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", gap: space.md, alignItems: "center", paddingVertical: 4 }}>
+      <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: brand.violet + "22", alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: brand.violet, fontWeight: "800", fontSize: 16 }}>{n}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.body, { color: t.text, fontWeight: "600" }]}>{title}</Text>
+        <Text style={[type.caption, { color: t.sub }]}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
+function Rule({ plus, color, title, body }: { plus: string; color: string; title: string; body: string }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", gap: space.md, alignItems: "center", paddingVertical: 4 }}>
+      <View style={{ minWidth: 76, paddingVertical: 6, borderRadius: 10, backgroundColor: color + "22", alignItems: "center" }}>
+        <Text style={{ color, fontWeight: "800", fontSize: 15, fontVariant: ["tabular-nums"] }}>{plus}</Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[type.body, { color: t.text, fontWeight: "600" }]}>{title}</Text>
+        <Text style={[type.caption, { color: t.sub }]}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
+function ToggleRow({ label, value, onChange, last }: { label: string; value: boolean; onChange: (v: boolean) => void; last?: boolean }) {
+  const t = useTheme();
+  return (
+    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 10, borderBottomWidth: last ? 0 : 1, borderColor: t.line }}>
+      <Text style={[type.body, { color: t.text }]}>{label}</Text>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: brand.violet }} />
+    </View>
   );
 }
 

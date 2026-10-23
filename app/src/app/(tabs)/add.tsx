@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
 import { Button, Card, FadeIn, haptic, Screen, Title } from "../../components/ui";
+import { fx } from "../../lib/fx";
 import { api, ApiError } from "../../lib/api";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
@@ -38,7 +39,7 @@ export default function Add() {
     setError(null);
     try {
       const recipe = await api.ingest(url.trim(), needCaption && caption.trim() ? caption.trim() : undefined);
-      haptic.success();
+      fx.ready();
       setHappy(true);
       s.addShare(recipe);
       setTimeout(() => {
@@ -49,7 +50,7 @@ export default function Add() {
         router.push("/recipe");
       }, 700);
     } catch (e) {
-      haptic.warn();
+      fx.error();
       const err = e as ApiError;
       setError(err.message);
       if (["gemini_failed", "caption_needed", "not_a_recipe"].includes(err.code)) setNeedCaption(true);

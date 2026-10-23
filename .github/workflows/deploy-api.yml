@@ -1,0 +1,73 @@
+name: Deploy API to Cloud Run
+
+# Builds api/ (the API and the landing page) and deploys it to Google Cloud Run.
+# Needs these GitHub repository secrets (Settings -> Secrets and variables -> Actions):
+#   GCP_PROJECT_ID, GCP_SA_KEY      one-time, from scripts/gcp-setup.sh
+#   GEMINI_TOKEN                    reads the videos (already set)
+#   ANTHROPIC_API_KEY               optional: builds smarter plans. Without it Pal uses a simple built-in plan.
+#   SHEET_WEBHOOK_URL, SHEET_SECRET optional: saves "yes" counts and feedback to the private Google Sheet.
+on:
+  push:
+    branches: [claude/gracious-keller-6lrp79]
+    paths: ["api/**", ".github/workflows/deploy-api.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      SHEET_WEBHOOK_URL: ${{ secrets.SHEET_WEBHOOK_URL }}
+      SHEET_SECRET: ${{ secrets.SHEET_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the one-time Google Cloud secrets exist
+        run: |
+          if [ -z "$GCP_PROJECT_ID" ] || [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
+            echo "::error::Missing GCP_PROJECT_ID or GCP_SA_KEY. Run scripts/gcp-setup.sh once and add the two secrets. See DEPLOY.md."
+            exit 1
+          fi
+          [ -n "$GEMINI_API_KEY" ] || echo "::warning::GEMINI_TOKEN is empty: Pal cannot read videos."
+          [ -n "$ANTHROPIC_API_KEY" ] || echo "::warning::ANTHROPIC_API_KEY is empty: plans use the simple built-in planner."
+          [ -n "$SHEET_WEBHOOK_URL" ] || echo "::warning::SHEET_WEBHOOK_URL is empty: yes counts and feedback only go to the logs."
+
+      - uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Write env vars file (never printed)
+        run: |
+          node -e '
+            const keys = ["GEMINI_API_KEY","ANTHROPIC_API_KEY","SHEET_WEBHOOK_URL","SHEET_SECRET"];
+            const env = { MOCK_AI: "0" };
+            for (const k of keys) if (process.env[k]) env[k] = process.env[k];
+            require("fs").writeFileSync("env.json", JSON.stringify(env));
+          '
+
+      - name: Deploy
+        run: |
+          gcloud run deploy scrollpal-api \
+            --project "$GCP_PROJECT_ID" \
+            --source api \
+            --region us-central1 \
+            --allow-unauthenticated \
+            --env-vars-file env.json \
+            --timeout 120 \
+            --max-instances 2 \
+            --quiet
+          rm -f env.json
+
+      - name: Print the address
+        run: |
+          URL=$(gcloud run services describe scrollpal-api --project "$GCP_PROJECT_ID" --region us-central1 --format 'value(status.url)')
+          echo "API + landing page: $URL"
+          curl -fsS "$URL/healthz"
+          {
+            echo "### API deployed"
+            echo "- Landing page: $URL"
+            echo "- Set the repo **variable** \`API_URL\` to \`$URL\` (Settings -> Secrets and variables -> Actions -> Variables), then re-run 'Publish app to Expo Go'."
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -7,6 +7,8 @@ Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns 
 - API: Node/TS (Express), deployed on Google Cloud Run. The phone only talks to this API. API keys never go in the app.
 - Gemini reads the video. Claude (small model) builds the plan.
 - Local state: AsyncStorage on the phone (XP, level, passport, plan). No database yet.
+- Sound: expo-audio (added with the owner's OK, 2026-10-23). Sounds are original and synthesized in-house; do not copy anyone's recordings or voice.
+- Landing page + hidden Google Sheet (Apps Script) for the "be Pal's pal" count and feedback, added with the owner's OK, 2026-10-23.
 - Animation: react-native-reanimated springs. Rings: react-native-svg. Haptics: expo-haptics.
 
 ## Rules

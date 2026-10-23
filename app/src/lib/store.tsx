@@ -16,8 +16,8 @@ type State = {
   cookLog: CookLog[];
   stamps: Stamp[];
   checklist: ChecklistItem[];
-  feedbackShown: boolean;
-  feedbackPending: boolean; // 3rd cook done; show the feedback screen once any celebration closes
+  feedbackAsked: number; // highest cook milestone Pal has already chatted about (1 or 3)
+  feedbackPending: number; // milestone to chat about once any celebration closes (0 = none)
 };
 
 const KEY = "scrollpal:v1";
@@ -31,8 +31,8 @@ const initial = (): State => ({
   cookLog: [],
   stamps: [],
   checklist: [],
-  feedbackShown: false,
-  feedbackPending: false,
+  feedbackAsked: 0,
+  feedbackPending: 0,
 });
 
 export type Celebration = { kind: "level"; level: number; math: string } | { kind: "stamp"; stamp: Stamp };
@@ -51,7 +51,7 @@ type Ctx = State & {
   completeSlot: (id: string) => DoneResult | null;
   skipSlot: (id: string) => void;
   toggleItem: (i: number) => void;
-  markFeedbackShown: () => void;
+  markFeedbackAsked: (milestone: number) => void;
   resetAll: () => void;
 };
 
@@ -162,14 +162,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? { key: creatorKey, label: recipe.creator, kind: "creator", at: now }
         : null;
 
-    const askFeedback = after.cooks >= 3 && !s.feedbackShown;
+    // Pal chats after the 1st cook (one quick question) and the 3rd (a proper catch-up).
+    const milestone = after.cooks === 1 ? 1 : after.cooks === 3 ? 3 : 0;
+    const askFeedback = milestone > 0 && s.feedbackAsked < milestone;
     update((st) => ({
       ...st,
       events,
       plan: st.plan && { ...st.plan, slots: st.plan.slots.map((x) => (x.id === id ? { ...x, status: "done" } : x)) },
       cookLog: [...st.cookLog, { at: now, title: recipe.title, cuisine: recipe.cuisine, creator: recipe.creator }],
       stamps: stamp ? [...st.stamps, stamp] : st.stamps,
-      feedbackPending: st.feedbackPending || askFeedback,
+      feedbackPending: askFeedback ? milestone : st.feedbackPending,
     }));
     api.event("done", s.deviceId, slot.meal);
 
@@ -194,13 +196,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const toggleItem = useCallback((i: number) =>
     update((s) => ({ ...s, checklist: s.checklist.map((c, j) => (j === i ? { ...c, checked: !c.checked } : c)) })), [update]);
-  const markFeedbackShown = useCallback(() => update((s) => ({ ...s, feedbackShown: true, feedbackPending: false })), [update]);
+  const markFeedbackAsked = useCallback(
+    (milestone: number) => update((s) => ({ ...s, feedbackAsked: Math.max(s.feedbackAsked, milestone), feedbackPending: 0 })),
+    [update],
+  );
   const resetAll = useCallback(() => update((s) => ({ ...initial(), deviceId: s.deviceId })), [update]);
   const clearCelebration = useCallback(() => setCelebration(null), []);
 
   const value: Ctx = {
     ...state, ready, progress, celebration, clearCelebration, addShare, openRecipe, setGoal, savePlan,
-    confirmPlan, completeSlot, skipSlot, toggleItem, markFeedbackShown, resetAll,
+    confirmPlan, completeSlot, skipSlot, toggleItem, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

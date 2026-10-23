@@ -61,6 +61,21 @@ export const Plan = z.object({
 });
 export type Plan = z.infer<typeof Plan>;
 
+export const PalBody = z.object({
+  ref: z.string().max(120).optional(), // which site sent them here
+  mobile: z.boolean().optional(),
+});
+
+export const FeedbackBody = z.object({
+  device: z.string().max(64),
+  milestone: z.number().int().min(0).max(50),
+  level: z.number().int().min(1).max(999),
+  cooks: z.number().int().min(0).max(9999),
+  id: z.string().max(40),
+  q: z.string().max(400),
+  a: z.string().trim().min(1).max(2000),
+});
+
 export const EventBody = z.object({
   type: z.enum(["share", "plan", "done", "skip"]),
   device: z.string().max(64).optional(),

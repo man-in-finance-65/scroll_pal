@@ -48,9 +48,11 @@ jobs:
           PID=$(node -e 'const a=require("./app.json");console.log(a.expo.extra?.eas?.projectId||"")')
           echo "EAS project id: $PID"
           echo "STABLE link (always the latest v1): exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0"
-          node -e 'const u=require("../update.json");const a=Array.isArray(u)?u:[u];console.log("This update group:",a[0]?.group)'
+          GROUP=$(node -e 'const u=require("../update.json");const a=Array.isArray(u)?u:[u];console.log(a[0]?.group||"")')
+          echo "THIS exact update: exp://u.expo.dev/$PID/group/$GROUP"
           {
             echo "### ScrollPal published"
             echo "- EAS project id: \`$PID\`"
-            echo "- Stable Expo Go link: \`exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0\`"
+            echo "- Stable Expo Go link (always the latest v1): \`exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0\`"
+            echo "- This exact update: \`exp://u.expo.dev/$PID/group/$GROUP\`"
           } >> "$GITHUB_STEP_SUMMARY"
