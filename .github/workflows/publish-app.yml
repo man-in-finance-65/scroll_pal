@@ -1,0 +1,56 @@
+name: Publish app to Expo Go
+
+# Publishes the ScrollPal app (app/) to the "v1" update branch on Expo.
+# Uses the EXPO_TOKEN repository secret. Run it by pushing app/ changes, or by hand:
+# GitHub -> Actions -> "Publish app to Expo Go" -> Run workflow.
+on:
+  push:
+    branches: [claude/gracious-keller-6lrp79]
+    paths: ["app/**", ".github/workflows/publish-app.yml"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      # Where the phone finds the API. Set the repo variable API_URL after the API is deployed.
+      EXPO_PUBLIC_API_URL: ${{ vars.API_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm test
+      - name: Warn if the API is not set
+        run: |
+          if [ -z "$EXPO_PUBLIC_API_URL" ]; then
+            echo "::warning::Repo variable API_URL is empty. The app will publish, but Pal cannot reach a server yet."
+          fi
+      - name: Who am I
+        run: npx -y eas-cli@latest whoami
+      - name: Link EAS project (slug scroll-pal)
+        run: npx -y eas-cli@latest init --non-interactive --force
+      - name: Make sure channel v1 points at branch v1
+        run: npx -y eas-cli@latest channel:create v1 --non-interactive || echo "channel v1 already exists"
+      - name: Publish update
+        run: |
+          npx -y eas-cli@latest update --branch v1 --message "${{ github.event.head_commit.message || 'manual publish' }}" --non-interactive --json | tee ../update.json
+      - name: Print the links to open in Expo Go
+        run: |
+          PID=$(node -e 'const a=require("./app.json");console.log(a.expo.extra?.eas?.projectId||"")')
+          echo "EAS project id: $PID"
+          echo "STABLE link (always the latest v1): exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0"
+          node -e 'const u=require("../update.json");const a=Array.isArray(u)?u:[u];console.log("This update group:",a[0]?.group)'
+          {
+            echo "### ScrollPal published"
+            echo "- EAS project id: \`$PID\`"
+            echo "- Stable Expo Go link: \`exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0\`"
+          } >> "$GITHUB_STEP_SUMMARY"
