@@ -50,6 +50,10 @@
   .step { background: rgba(255,255,255,.07); border-radius: 18px; padding: 14px 16px; display: grid; gap: 8px; }
   .step b { font-size: 16px; }
   .step .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .step.locked #open { opacity: .35; pointer-events: none; }
+  .step.locked #lockhint { display: block; } #lockhint { display: none; }
+  #step1.done { opacity: .6; }
+  .have { background: transparent; color: var(--sub); font-size: 14px; font-weight: 600; padding: 6px; text-decoration: underline; }
   .pill { flex: 1; min-width: 120px; background: rgba(255,255,255,.12); font-size: 15px; padding: 11px 14px; border-radius: 12px; }
 
   /* Pal */
@@ -146,17 +150,19 @@
 
   <!-- Yes -->
   <section id="welcome" class="hidden">
-    <h1>Welcome, pal! 🎉</h1>
-    <p id="opening" style="margin-top:12px">Opening ScrollPal…</p>
+    <h1 id="wtitle">First, get Expo Go</h1>
+    <p id="opening" style="margin-top:12px">ScrollPal opens inside <b>Expo Go</b>, a free app from the App Store. Get it once, then come back here.</p>
     <div class="steps">
       <div class="step" id="step1">
-        <b>1. Get Expo Go (free)</b>
-        <p class="small">It's the app that opens ScrollPal. Skip this if you already have it.</p>
-        <div class="row"><a class="btn pill" id="ios" href="#">App Store</a><a class="btn pill" id="android" href="#">Google Play</a></div>
+        <b>1. Get Expo Go (free, one time)</b>
+        <p class="small">It's the app that runs ScrollPal. You won't find "ScrollPal" in the store, so look for <b>Expo Go</b>.</p>
+        <div class="row"><a class="btn pill getgo" id="ios" href="#">App Store</a><a class="btn pill getgo" id="android" href="#">Google Play</a></div>
+        <button class="have" id="have">I already have Expo Go</button>
       </div>
-      <div class="step">
+      <div class="step locked" id="step2">
         <b>2. Open ScrollPal</b>
         <a class="btn yes" id="open" href="#">Open ScrollPal</a>
+        <p class="small" id="lockhint">Unlocks after step 1.</p>
       </div>
     </div>
     <p class="small hidden" id="inapp" style="margin-top:6px">Opened this inside Instagram, TikTok or similar? Tap ••• and choose <b>Open in browser</b> first.</p>
@@ -219,6 +225,25 @@
     cfg = c; $("open").href = c.appUrl; $("ios").href = c.iosStore; $("android").href = c.androidStore;
   }).catch(() => {});
 
+  // ---- Expo Go gate: ScrollPal only opens once Expo Go is installed ----
+  let hasGo = false;
+  try { hasGo = localStorage.getItem("pal-expo-go") === "1"; } catch {}
+  const unlock = (remember) => {
+    hasGo = true;
+    if (remember) { try { localStorage.setItem("pal-expo-go", "1"); } catch {} }
+    $("step2").classList.remove("locked"); $("step1").classList.add("done");
+    $("wtitle").textContent = "Welcome, pal! 🎉";
+    $("opening").textContent = "Got Expo Go? Now tap “Open ScrollPal”. If it asks to open Expo Go, tap Open.";
+  };
+  // Show only the store that fits this phone.
+  if (/Android/i.test(ua)) $("ios").classList.add("hidden"); else if (/iPhone|iPad|iPod/i.test(ua)) $("android").classList.add("hidden");
+  $("have").addEventListener("click", () => unlock(true));
+  document.querySelectorAll(".getgo").forEach((a) => a.addEventListener("click", () => { try { sessionStorage.setItem("pal-went-store", "1"); } catch {} }));
+  // Coming back from the store: unlock step 2 automatically.
+  const back = () => { let w = false; try { w = sessionStorage.getItem("pal-went-store") === "1"; } catch {} if (w && !hasGo && !$("welcome").classList.contains("hidden")) unlock(true); };
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) back(); });
+  addEventListener("pageshow", back);
+
   // ---- yes! ----
   let counted = false;
   $("yes").addEventListener("click", () => {
@@ -227,15 +252,14 @@
     mood("cheer"); burst(); show("welcome");
     $("inapp").classList.toggle("hidden", !inApp);
     $("desktop").classList.toggle("hidden", mobile);
-    if (!mobile) $("opening").textContent = "You're in!";
+    if (hasGo) unlock(false);
+    if (!mobile) { $("wtitle").textContent = "You're in! 🎉"; $("opening").textContent = "Open this page on your phone to get started."; }
     if (!counted) { // one yes = one count, even if they tap again
       counted = true;
       fetch("/v1/pal", { method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ ref: document.referrer ? new URL(document.referrer).hostname : "", mobile }), keepalive: true }).catch(() => {});
     }
-    // Take them to the app. If Expo Go isn't installed, the page stays here with the store buttons.
-    if (mobile && !inApp) setTimeout(() => { location.href = cfg.appUrl; }, 1600);
-    else $("opening").textContent = mobile ? "Tap “Open ScrollPal” below." : "You're in!";
+    // No automatic jump to the app: without Expo Go that link goes nowhere. The pal taps "Open ScrollPal" once step 1 is done.
   });
 
   $("no").addEventListener("click", () => { mood("sad"); show("nope"); });
