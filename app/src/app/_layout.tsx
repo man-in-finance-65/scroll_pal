@@ -2,6 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import { AdviceButton } from "../components/AdviceButton";
 import { Celebration } from "../components/Celebration";
 import { initFx } from "../lib/fx";
 import { setupNotifications } from "../lib/notify";
@@ -20,6 +21,7 @@ function Root() {
         <Stack.Screen name="checklist" options={{ title: "Grocery checklist", presentation: "modal" }} />
         <Stack.Screen name="feedback" options={{ title: "", presentation: "modal" }} />
       </Stack>
+      <AdviceButton />
       <Celebration />
     </ThemeProvider>
   );

@@ -5,7 +5,7 @@ name: Deploy API to Cloud Run
 #   GCP_PROJECT_ID, GCP_SA_KEY      one-time, from scripts/gcp-setup.sh
 #   GEMINI_TOKEN                    reads the videos (already set)
 #   ANTHROPIC_API_KEY               optional: builds smarter plans. Without it Pal uses a simple built-in plan.
-#   SHEET_WEBHOOK_URL, SHEET_SECRET optional: saves "yes" counts and feedback to the private Google Sheet.
+#   SHEET_ID                        optional: the live-tracker sheet (repo variable or secret).
 # Manual only. The easy way to deploy is scripts/deploy-cloud-shell.sh (see DEPLOY.md); use this if you set up GCP_SA_KEY.
 on:
   workflow_dispatch:
@@ -19,8 +19,7 @@ jobs:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      SHEET_WEBHOOK_URL: ${{ secrets.SHEET_WEBHOOK_URL }}
-      SHEET_SECRET: ${{ secrets.SHEET_SECRET }}
+      SHEET_ID: ${{ vars.SHEET_ID || secrets.SHEET_ID }}
     steps:
       - uses: actions/checkout@v4
 
@@ -32,7 +31,7 @@ jobs:
           fi
           [ -n "$GEMINI_API_KEY" ] || echo "::warning::GEMINI_TOKEN is empty: Pal cannot read videos."
           [ -n "$ANTHROPIC_API_KEY" ] || echo "::warning::ANTHROPIC_API_KEY is empty: plans use the simple built-in planner."
-          [ -n "$SHEET_WEBHOOK_URL" ] || echo "::warning::SHEET_WEBHOOK_URL is empty: yes counts and feedback only go to the logs."
+          [ -n "$SHEET_ID" ] || echo "::warning::SHEET_ID is empty: yes counts and feedback only go to the logs."
 
       - uses: google-github-actions/auth@v2
         with:
@@ -42,7 +41,7 @@ jobs:
       - name: Write env vars file (never printed)
         run: |
           node -e '
-            const keys = ["GEMINI_API_KEY","ANTHROPIC_API_KEY","SHEET_WEBHOOK_URL","SHEET_SECRET"];
+            const keys = ["GEMINI_API_KEY","ANTHROPIC_API_KEY","SHEET_ID"];
             const env = { MOCK_AI: "0" };
             for (const k of keys) if (process.env[k]) env[k] = process.env[k];
             require("fs").writeFileSync("env.json", JSON.stringify(env));

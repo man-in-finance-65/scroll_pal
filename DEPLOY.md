@@ -31,13 +31,13 @@ You need a Google Cloud project with billing turned on (Google gives free credit
 **Easiest way: one paste in Google Cloud Shell (no GitHub secrets needed)**
 
 1. Open https://shell.cloud.google.com (signed in to the Google account that owns the project).
-2. Run (replace `YOUR_PROJECT_ID`):
+2. Run (replace `YOUR_REAL_PROJECT_ID` with the project ID shown in Cloud Shell's prompt, e.g. `muse-x-scroll-pal-youtube`; don't type it literally):
    ```bash
    git clone https://github.com/man-in-finance-65/scroll_pal && cd scroll_pal
    git checkout claude/gracious-keller-6lrp79
-   bash scripts/deploy-cloud-shell.sh YOUR_PROJECT_ID
+   bash scripts/deploy-cloud-shell.sh YOUR_REAL_PROJECT_ID
    ```
-3. It asks for your Gemini key (and optionally the Anthropic key and the sheet details). What you type is hidden and goes straight into Google's Secret Manager.
+3. It asks for your Gemini key (and optionally the Anthropic key). What you type is hidden and goes straight into Google's Secret Manager. (If the server is already deployed it tells you to use `scripts/update-server.sh` instead.)
 4. After 3 to 5 minutes it prints your address, like `https://scrollpal-api-xxxx-uc.a.run.app`.
 5. **Send that address to Claude**, who re-publishes the app with it. Or do it yourself: GitHub → **Actions → Publish app to Expo Go → Run workflow**, paste the address into the box.
 
@@ -45,7 +45,7 @@ Your landing page is that same address. Open it on your phone.
 
 Check it: `curl https://YOUR-ADDRESS/health` shows `{"ok":true,"mock":false}`. (Not `/healthz`: Google reserves that one.)
 
-**Alternative: let GitHub deploy for you.** Needs the secrets `GCP_PROJECT_ID` and `GCP_SA_KEY` (run `bash scripts/gcp-setup.sh YOUR_PROJECT_ID` in Cloud Shell to create the key). Then GitHub → **Actions → Deploy API to Cloud Run → Run workflow**. It deploys and re-publishes the app with the new address by itself. If a run says "Missing GCP_PROJECT_ID or GCP_SA_KEY", GitHub can't see those secrets (check the name and that they're **Repository** secrets, not Environment secrets).
+**Alternative: let GitHub deploy for you.** Needs the secrets `GCP_PROJECT_ID` and `GCP_SA_KEY` (run `bash scripts/gcp-setup.sh YOUR_REAL_PROJECT_ID` in Cloud Shell to create the key). Then GitHub → **Actions → Deploy API to Cloud Run → Run workflow**. It deploys and re-publishes the app with the new address by itself. If a run says "Missing GCP_PROJECT_ID or GCP_SA_KEY", GitHub can't see those secrets (check the name and that they're **Repository** secrets, not Environment secrets).
 
 **Updating the server later** (after I change the API code). In Cloud Shell, inside the `scroll_pal` folder:
 ```bash
@@ -57,19 +57,27 @@ It keeps your keys and settings. No questions asked.
 
 Cost note: the API is capped at 2 instances. The recipe cache is in memory, so it resets on restart.
 
-## 3. Hidden Google Sheet (counts + feedback, about 3 minutes)
+## 3. The live tracker (Google Sheet)
 
-The landing page and Pal chat save rows to a private Google Sheet. Visitors never see it. If you skip this, rows still go to the Cloud Run logs (`EVENT type=pal_yes`, `EVENT type=feedback`).
+Every tap and every message people send to Pal is saved to a private Google Sheet, live.
+**Your tracker:** https://docs.google.com/spreadsheets/d/1ZXnv2aLX2tc93qWDKJvOK97DOzEDR8v3fA6-RjUyaKU/edit (only you and the server can open it).
 
-1. Create a new Google Sheet (name it anything, e.g. "ScrollPal Pals"). Keep it private; do not share the link.
-2. **Extensions → Apps Script**. Paste all of `docs/sheet-webhook.gs`. Change `SECRET` to a long random string and remember it.
-3. In the editor, choose the function `setup` and press **Run**. Approve the permissions. It creates the tabs **Summary**, **Pals** and **Feedback**.
-4. **Deploy → New deployment →** gear icon → **Web app** → Execute as **Me**, Who has access **Anyone** → **Deploy**. Copy the web app URL.
-5. Give the webhook URL and `SECRET` to the Cloud Shell deploy script (it asks), and run it again. (GitHub route: add secrets `SHEET_WEBHOOK_URL` and `SHEET_SECRET`, then re-run the deploy.)
+Tabs:
+- **Summary**: the numbers at a glance (said yes, people using the app, links digested, cooks, advice messages).
+- **Users**: one row per person (an anonymous random code per phone): when they started, last active, links, plans, cooks, skips, how many advice messages, their **latest advice**, and where they are (Hooked, Cooking, Planned...).
+- **Feedback**: every advice message, in order, with the question Pal asked and exactly what they said. Filter column B to read one person's whole conversation.
+- **Events** and **Pals**: the raw log of taps, and everyone who said yes on the landing page.
 
-"Anyone" only means anyone with the long URL can try to post; the API's secret check rejects them. Only your API knows the secret.
+The sheet fills itself once the server has the update (next section). People are anonymous: no names or emails are collected.
 
-The **Summary** tab shows how many pals said yes and how many feedback answers came in.
+To update the server so it writes to the sheet (and to ship any other server change), in Cloud Shell inside the `scroll_pal` folder:
+```bash
+git pull origin claude/gracious-keller-6lrp79
+bash scripts/update-server.sh
+```
+It keeps your keys. It turns on the Sheets service, lets the server write to the tracker, and redeploys.
+
+If rows don't appear: the sheet must be shared (Editor) with your server's account, `YOUR_PROJECT_NUMBER-compute@developer.gserviceaccount.com`. Check the Cloud Run logs for lines starting `sheet `.
 
 ## Count taps (share / plan / done / skip)
 

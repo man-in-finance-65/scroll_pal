@@ -6,7 +6,7 @@ import { IngestError, ingest } from "./ingest.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
 import { EventBody, FeedbackBody, IngestBody, PalBody, PlanBody } from "./schema.js";
-import { toSheet } from "./sheet.js";
+import { sheetTime, toSheet } from "./sheet.js";
 
 const app = express();
 app.set("trust proxy", true); // behind Cloud Run: req.ip is the visitor, not Google
@@ -57,11 +57,12 @@ app.post("/v1/plan", async (req: Request, res: Response) => {
 });
 
 // One line per tap, so you can count them in Cloud Run logs:  grep "EVENT type=done"
-app.post("/v1/event", (req: Request, res: Response) => {
+app.post("/v1/event", limit(240), (req: Request, res: Response) => {
   const body = EventBody.safeParse(req.body);
   if (!body.success) return bad(res, "Send {type: share|plan|done|skip}.");
   const { type, device = "unknown", ref = "" } = body.data;
   console.log(`EVENT type=${type} device=${device} ref="${ref.replace(/"/g, "'")}" ts=${new Date().toISOString()}`);
+  void toSheet("Events", [sheetTime(), device, type, ref]);
   res.status(204).end();
 });
 
@@ -71,7 +72,7 @@ app.post("/v1/pal", limit(10), (req: Request, res: Response) => {
   if (!body.success) return bad(res, "Bad request.");
   const { ref = "", mobile = false } = body.data;
   console.log(`EVENT type=pal_yes mobile=${mobile} ref="${ref.replace(/"/g, "'")}" ts=${new Date().toISOString()}`);
-  void toSheet("pal_yes", { ts: new Date().toISOString(), ref, mobile });
+  void toSheet("Pals", [sheetTime(), ref, mobile]);
   res.json({ ok: true });
 });
 
@@ -80,9 +81,14 @@ app.post("/v1/feedback", limit(40), (req: Request, res: Response) => {
   const body = FeedbackBody.safeParse(req.body);
   if (!body.success) return bad(res, "Send {device, milestone, level, cooks, id, q, a}.");
   const f = body.data;
-  console.log(`EVENT type=feedback device=${f.device} step=${f.id} milestone=${f.milestone} ts=${new Date().toISOString()}`);
-  void toSheet("feedback", { ts: new Date().toISOString(), ...f });
-  res.status(204).end();
+  // The full message is logged too, as a backup in case the sheet is ever unreachable.
+  console.log(`EVENT type=feedback device=${f.device} step=${f.id} milestone=${f.milestone} level=${f.level} cooks=${f.cooks} said=${JSON.stringify(f.a)} ts=${new Date().toISOString()}`);
+  const when = f.milestone === 1 ? "after 1st cook" : f.milestone === 3 ? "after 3rd cook" : "from the Pal tab";
+  // Answer the app only once the sheet has the row (or we know it can't), so a failure shows "try again" in the chat.
+  toSheet("Feedback", [sheetTime(), f.device, when, f.level, f.cooks, f.id, f.q, f.a]).then((saved) => {
+    if (!saved && process.env.SHEET_ID) console.warn(`feedback NOT in sheet (still in logs): device=${f.device} step=${f.id}`);
+    res.status(204).end();
+  });
 });
 
 // The landing page lives in api/landing and is served at "/".

@@ -12,7 +12,18 @@ import { usePal } from "../lib/usePal";
 
 // Pal asks for advice like a mate would. No form, no "rate us": one question at a time,
 // tap an answer or say it in your own words. Each answer is saved on its own, so nothing is lost if you close it.
-type Step = { id: string; ask: string; chips: string[]; text?: boolean; hint?: string };
+type Step = { id: string; apiId?: string; ask: string; chips: string[]; text?: boolean; hint?: string };
+
+// After the scripted questions Pal keeps listening: every message is saved, until they say that's all.
+const ALL = "That's all";
+const moreStep = (k: number): Step => ({
+  id: `more${k}`,
+  apiId: "more",
+  ask: k === 0 ? "Thanks, pal. That really helps me get better. Anything else on your mind?" : "Noted! Anything else?",
+  chips: [ALL],
+  text: true,
+  hint: "Type another thought…",
+});
 
 const FLOWS: Record<number, Step[]> = {
   // After the 1st cook: one quick question.
@@ -67,12 +78,14 @@ export default function Feedback() {
   const milestone = [1, 3].includes(Number(m)) ? Number(m) : 0;
   const steps = FLOWS[milestone];
 
+  const stepAt = (k: number): Step => (k < steps.length ? steps[k] : moreStep(k - steps.length));
   const [i, setI] = useState(0);
+  const [finished, setFinished] = useState(false);
   const [log, setLog] = useState<Msg[]>([{ from: "pal", text: steps[0].ask, key: "q0" }]);
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
   const [failed, setFailed] = useState<{ step: Step; answer: string } | null>(null);
-  const done = i >= steps.length;
+  const done = finished;
   const scroller = useRef<ScrollViewInstance>(null);
 
   useEffect(() => {
@@ -87,12 +100,18 @@ export default function Feedback() {
     const text = a.trim();
     if (!text) return;
     fx.tap();
+    if (text === ALL && step.apiId === "more") {
+      // Nothing to save, just a goodbye.
+      setLog((l) => [...l, { from: "me", text, key: "a" + step.id }, { from: "pal", text: "Anytime, pal. 💜", key: "bye" }]);
+      setFinished(true);
+      return;
+    }
     setDraft("");
     setFailed(null);
     setLog((l) => (l.some((x) => x.key === "a" + step.id) ? l : [...l, { from: "me", text, key: "a" + step.id }]));
     setTyping(true);
     try {
-      await api.feedback({ device: s.deviceId, milestone, level: s.progress.level, cooks: s.progress.cooks, id: step.id, q: step.ask, a: text });
+      await api.feedback({ device: s.deviceId, milestone, level: s.progress.level, cooks: s.progress.cooks, id: step.apiId ?? step.id, q: step.ask, a: text });
     } catch {
       setTyping(false);
       setFailed({ step, answer: text });
@@ -105,14 +124,12 @@ export default function Feedback() {
       fx.ready();
       setLog((l) => [
         ...l,
-        next < steps.length
-          ? { from: "pal", text: steps[next].ask, key: "q" + next }
-          : { from: "pal", text: "Thank you, pal. That really helps me get better. 💜", key: "bye" },
+        { from: "pal", text: stepAt(next).ask, key: "q" + next },
       ]);
     }, 600);
   }
 
-  const step = steps[i];
+  const step = stepAt(i);
   const bubble = (mine: boolean) => ({
     alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
     maxWidth: "85%" as const,
@@ -188,7 +205,7 @@ export default function Feedback() {
         {done ? (
           <Button title="Back to cooking" onPress={() => router.back()} />
         ) : (
-          !typing && <Button title="Not now" kind="ghost" onPress={() => router.back()} />
+          !typing && <Button title={i > 0 ? "Close" : "Not now"} kind="ghost" onPress={() => router.back()} />
         )}
       </ScrollView>
     </KeyboardAvoidingView>
