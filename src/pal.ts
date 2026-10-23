@@ -1,7 +1,9 @@
 import { PalResult } from './types';
 
 // Tried in order; busy or rate-limited models fall through to the next one.
-const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
+// Fastest first. Thinking is switched off on 2.5-flash: it adds many seconds and Pal doesn't need it.
+const MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-flash-latest'];
+const NO_THINKING = new Set(['gemini-2.5-flash']);
 const ROUNDS = 2;
 const TIMEOUT_MS = 15000;
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
@@ -46,10 +48,15 @@ export async function askPal({ apiKey, url, caption, image, onStatus }: PalInput
   if (caption) parts.push({ text: `Caption / notes: ${caption}` });
   if (image) parts.push({ inline_data: { mime_type: image.mimeType, data: image.base64 } });
 
-  const payload = JSON.stringify({
-    contents: [{ role: 'user', parts }],
-    generationConfig: { responseMimeType: 'application/json', responseSchema: SCHEMA },
-  });
+  const payloadFor = (model: string) =>
+    JSON.stringify({
+      contents: [{ role: 'user', parts }],
+      generationConfig: {
+        responseMimeType: 'application/json',
+        responseSchema: SCHEMA,
+        ...(NO_THINKING.has(model) && { thinkingConfig: { thinkingBudget: 0 } }),
+      },
+    });
 
   let lastError = 'Gemini is busy. Try again in a minute.';
   for (let round = 0; round < ROUNDS; round++) {
@@ -62,7 +69,7 @@ export async function askPal({ apiKey, url, caption, image, onStatus }: PalInput
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-          body: payload,
+          body: payloadFor(model),
           signal: ctl.signal,
         },
       ).catch(() => null);

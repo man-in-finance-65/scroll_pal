@@ -167,7 +167,7 @@ function NewPod({ onCancel, onCreated }: { onCancel: () => void; onCreated: (pod
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       base64: true,
-      quality: 0.6,
+      quality: 0.3,
     });
     const asset = result.assets?.[0];
     if (!result.canceled && asset?.base64) {
