@@ -52,7 +52,7 @@ Cost note: the API is capped at 2 instances. Gemini and Claude calls cost a few 
 
 The landing page and Pal chat save rows to a private Google Sheet. Visitors never see it. If you skip this, rows still go to the Cloud Run logs (`EVENT type=pal_yes`, `EVENT type=feedback`).
 
-1. Create a Google Sheet (or use "ScrollPal Pals" if one exists). Keep it private.
+1. Create a new Google Sheet (name it anything, e.g. "ScrollPal Pals"). Keep it private; do not share the link.
 2. **Extensions → Apps Script**. Paste all of `docs/sheet-webhook.gs`. Change `SECRET` to a long random string and remember it.
 3. In the editor, choose the function `setup` and press **Run**. Approve the permissions. It creates the tabs **Summary**, **Pals** and **Feedback**.
 4. **Deploy → New deployment →** gear icon → **Web app** → Execute as **Me**, Who has access **Anyone** → **Deploy**. Copy the web app URL.
