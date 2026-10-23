@@ -55,7 +55,7 @@ jobs:
             --region us-central1 \
             --allow-unauthenticated \
             --env-vars-file env.json \
-            --timeout 120 \
+            --timeout 300 \
             --max-instances 2 \
             --quiet
           rm -f env.json

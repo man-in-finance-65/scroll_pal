@@ -28,11 +28,11 @@ app.post("/v1/ingest", async (req: Request, res: Response) => {
   const body = IngestBody.safeParse(req.body);
   if (!body.success) return bad(res, "Send {url, caption?}.");
   try {
-    const { recipe, cached } = await ingest(body.data.url, body.data.caption);
-    console.log(`ingest ok cached=${cached} title="${recipe.title}"`);
-    res.json({ ...recipe, cached });
+    const { recipe, cached, info } = await ingest(body.data.url, body.data.caption);
+    console.log(`ingest ok cached=${cached} title="${recipe.title}" ${info ? `model=${info.model} ms=${info.ms} tokens in/out/thinking=${info.promptTokens}/${info.outputTokens}/${info.thoughtTokens ?? 0} thinking=${info.thinking}` : ""}`);
+    res.json({ ...recipe, cached, timing: info });
   } catch (e) {
-    if (e instanceof IngestError) return res.status(e.status).json({ error: e.code, message: e.message });
+    if (e instanceof IngestError) return res.status(e.status).json({ error: e.code, message: e.message, detail: e.detail });
     console.error("ingest crashed", e);
     res.status(500).json({ error: "server_error", message: "Something upset my tummy. Try again in a moment." });
   }

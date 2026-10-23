@@ -58,7 +58,7 @@ gcloud run deploy scrollpal-api \
   --allow-unauthenticated \
   --set-secrets "$SECRETS" \
   --set-env-vars "$ENVVARS" \
-  --timeout 120 \
+  --timeout 300 \
   --max-instances 2 \
   --quiet
 

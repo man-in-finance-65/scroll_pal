@@ -1,6 +1,6 @@
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
 import { Button, Card, FadeIn, Screen, Title } from "../../components/ui";
@@ -19,8 +19,15 @@ export default function Add() {
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [detail, setDetail] = useState<string | null>(null);
   const [needCaption, setNeedCaption] = useState(false);
   const [happy, setHappy] = useState(false);
+  const [waited, setWaited] = useState(0); // seconds Pal has been digesting
+  useEffect(() => {
+    if (!busy) { setWaited(0); return; }
+    const id = setInterval(() => setWaited((w) => w + 1), 1000);
+    return () => clearInterval(id);
+  }, [busy]);
 
   const state: PalState = busy ? "thinking" : happy ? "excited" : error ? "slow" : "listening";
 
@@ -37,6 +44,7 @@ export default function Add() {
     Keyboard.dismiss();
     setBusy(true);
     setError(null);
+    setDetail(null);
     try {
       const recipe = await api.ingest(url.trim(), needCaption && caption.trim() ? caption.trim() : undefined);
       fx.ready();
@@ -53,6 +61,7 @@ export default function Add() {
       fx.error();
       const err = e as ApiError;
       setError(err.message);
+      setDetail(err.detail ?? null);
       if (["gemini_failed", "caption_needed", "not_a_recipe"].includes(err.code)) setNeedCaption(true);
     } finally {
       setBusy(false);
@@ -76,7 +85,7 @@ export default function Add() {
       <View style={{ alignItems: "center" }}>
         <Pal state={state} size={150} body={pal.body} level={pal.level} energy={pal.mood.energy} />
         <Text style={[type.caption, { color: t.sub, marginTop: 4 }]}>
-          {busy ? "Digesting… give me a sec" : happy ? "Mmm, digested!" : error ? "That one was hard to digest." : "Ready when you are"}
+          {busy ? (waited < 15 ? "Digesting… give me a sec" : waited < 45 ? `Still digesting… ${waited}s. Videos take a bit.` : `Still on it… ${waited}s. Long videos are chewy.`) : happy ? "Mmm, digested!" : error ? "That one was hard to digest." : "Ready when you are"}
         </Text>
       </View>
 
@@ -103,6 +112,7 @@ export default function Add() {
           <FadeIn>
             <Card style={{ borderWidth: 1, borderColor: t.danger + "55" }}>
               <Text style={[type.body, { color: t.text }]}>{error}</Text>
+              {detail ? <Text style={[type.caption, { color: t.faint }]}>Technical note: {detail}</Text> : null}
             </Card>
           </FadeIn>
         )}

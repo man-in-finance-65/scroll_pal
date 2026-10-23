@@ -4,12 +4,12 @@ import type { Goal, PlanFromApi, Recipe } from "./types";
 const BASE = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http://localhost:8080" : "")).replace(/\/$/, "");
 
 export class ApiError extends Error {
-  constructor(public code: string, message: string) {
+  constructor(public code: string, message: string, public detail?: string) {
     super(message);
   }
 }
 
-async function post<T>(path: string, body: unknown, timeoutMs = 90_000): Promise<T> {
+async function post<T>(path: string, body: unknown, timeoutMs = 150_000): Promise<T> {
   if (!BASE) throw new ApiError("no_server", "I'm not connected to my server yet. Whoever set up this app needs to finish deploying it.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
@@ -28,7 +28,7 @@ async function post<T>(path: string, body: unknown, timeoutMs = 90_000): Promise
   }
   if (res.status === 204) return undefined as T;
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new ApiError(data.error ?? "server_error", data.message ?? "Something went wrong. Try again.");
+  if (!res.ok) throw new ApiError(data.error ?? "server_error", data.message ?? "Something went wrong. Try again.", data.detail);
   return data as T;
 }
 

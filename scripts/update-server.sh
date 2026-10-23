@@ -29,6 +29,7 @@ gcloud run deploy scrollpal-api \
   --source api \
   --region "$REGION" \
   --allow-unauthenticated \
+  --timeout 300 \
   --update-env-vars "SHEET_ID=$SHEET_ID" \
   --quiet
 

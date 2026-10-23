@@ -46,7 +46,8 @@ export const _setTokenProvider = (fn: TokenFn) => { getTokenImpl = fn; };
 
 const apiBase = () => process.env.SHEETS_API_BASE || "https://sheets.googleapis.com";
 
-// Appends a row. Never throws: a sheet problem must never break the app. Returns true if it was saved.
+// Writes the next free row (OVERWRITE, not INSERT_ROWS: inserting rows would shift the tracker's formulas and lose
+// the date format). Never throws: a sheet problem must never break the app. Returns true if it was saved.
 export async function toSheet(tab: Tab, row: unknown[]): Promise<boolean> {
   const id = process.env.SHEET_ID;
   if (!id) return false;
@@ -54,7 +55,7 @@ export async function toSheet(tab: Tab, row: unknown[]): Promise<boolean> {
   for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const token = await getTokenImpl();
-      const url = `${apiBase()}/v4/spreadsheets/${id}/values/${encodeURIComponent(`${tab}!${COLUMNS[tab]}`)}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`;
+      const url = `${apiBase()}/v4/spreadsheets/${id}/values/${encodeURIComponent(`${tab}!${COLUMNS[tab]}`)}:append?valueInputOption=RAW&insertDataOption=OVERWRITE`;
       const res = await fetch(url, {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
