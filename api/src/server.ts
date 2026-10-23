@@ -6,6 +6,13 @@ import { EventBody, IngestBody, PlanBody } from "./schema.js";
 
 const app = express();
 app.use(express.json({ limit: "200kb" }));
+// Phones don't need this; it lets the web preview of the app call the API too.
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Headers", "content-type");
+  if (req.method === "OPTIONS") return res.status(204).end();
+  next();
+});
 
 const bad = (res: Response, message: string) => res.status(400).json({ error: "bad_request", message });
 

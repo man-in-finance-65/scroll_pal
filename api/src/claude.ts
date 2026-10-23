@@ -26,8 +26,9 @@ export async function buildPlan(recipe: Recipe, goal: keyof typeof GOAL_HINT, da
         role: "user",
         content:
           `Build a ${days}-day plan with 2 meal slots per day (lunch and dinner). ` +
-          `Cook the recipe below at least ${Math.ceil(days / 2)} times; set uses_recipe true on those slots ` +
-          `and use leftovers smartly. Other slots: simple meals with common ingredients.\n` +
+          `Cook the recipe below fresh at least ${Math.ceil(days / 2)} times (kind "cook"). ` +
+          `Use its leftovers smartly (kind "leftovers"); a batch serves ${recipe.servings}. ` +
+          `Other slots: simple meals with common ingredients (kind "simple").\n` +
           `${GOAL_HINT[goal]}\n\nRecipe: ${recipe.title} (${recipe.cuisine}), serves ${recipe.servings}.\n` +
           `Ingredients: ${recipe.ingredients.map((i) => i.name).join(", ")}`,
       },

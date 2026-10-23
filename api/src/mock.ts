@@ -36,10 +36,10 @@ export function mockPlan(goal: string, days: number): Plan {
     days: Array.from({ length: days }, (_, i) => ({
       day: i + 1,
       slots: [
-        { slot: "lunch" as const, meal: "Greek yogurt, berries and granola", uses_recipe: false, note: "Quick, high protein." },
+        { slot: "lunch" as const, meal: "Greek yogurt, berries and granola", kind: "simple" as const, note: "Quick, high protein." },
         i % 2 === 0
-          ? { slot: "dinner" as const, meal: "Gochujang Chicken Rice Bowl", uses_recipe: true, note: extra }
-          : { slot: "dinner" as const, meal: "Leftover gochujang chicken wrap", uses_recipe: true, note: "Use last night's chicken." },
+          ? { slot: "dinner" as const, meal: "Gochujang Chicken Rice Bowl", kind: "cook" as const, note: extra }
+          : { slot: "dinner" as const, meal: "Leftover gochujang chicken wrap", kind: "leftovers" as const, note: "Use last night's chicken." },
       ],
     })),
   };

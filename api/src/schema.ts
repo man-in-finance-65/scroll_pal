@@ -49,7 +49,9 @@ export const PlanBody = z.object({
 export const Slot = z.object({
   slot: z.enum(["breakfast", "lunch", "dinner", "snack"]),
   meal: z.string(),
-  uses_recipe: z.boolean(),
+  // cook = make a fresh batch of the recipe (this is what earns XP), leftovers = eat a batch you already made,
+  // simple = an easy meal that isn't the recipe
+  kind: z.enum(["cook", "leftovers", "simple"]),
   note: z.string(),
 });
 

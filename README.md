@@ -41,8 +41,24 @@ npm run dev                    # prints "Pal API listening on :8080"
 ## 3. Tests
 
 ```bash
-cd app && npm test     # XP and level rules
+cd app && npm test     # XP and level rules (11 tests)
 ```
+
+## What to check on your phone
+
+1. **Add:** paste a YouTube Shorts recipe link and tap *Make it a recipe*. Pal shows *Thinking*, then *Excited*, and the recipe opens.
+2. **Recipe:** you see big number cards. Numbers Pal estimated start with `~`, and the time card shows its sum.
+3. **Build my plan:** pick Bulk, Maintain or Cut and a number of days. The plan opens.
+4. **Confirm plan:** a notification says "Cart ready, N items" and the grocery checklist opens. It is labelled as a checklist, not a cart.
+5. **Done** on a cook:
+   - You feel a haptic, see "+10 XP", and get a passport stamp.
+   - After the 3rd Done, Pal reaches **Lv.2** with the maths shown (3 cooks × 10 = 30) and a stronger haptic.
+   - The feedback screen appears after that.
+6. **Skip** a cook: Pal goes *Slow* but keeps its level.
+7. **Pal tab:** you see the XP maths, the weekly ring and the goal switch. Pal's body changes with your goal.
+8. **Dark mode:** switch your phone to dark mode and check every screen.
+
+Start over: Passport tab → *Start over*.
 
 ## 4. Deploy and share
 
