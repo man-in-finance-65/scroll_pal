@@ -197,3 +197,19 @@ export function SpeechBubble({ children }: { children: ReactNode }) {
     </Animated.View>
   );
 }
+
+// A greyed-out card for something that isn't built yet, so nobody wonders why it doesn't work.
+export function ComingSoon({ title, body }: { title: string; body: string }) {
+  const t = useTheme();
+  return (
+    <View style={{ backgroundColor: t.card, borderRadius: radius.lg, padding: space.lg, gap: 6, opacity: 0.7, borderWidth: 1.5, borderStyle: "dashed", borderColor: t.faint }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm }}>
+        <Text style={[type.h2, { color: t.text, flex: 1 }]}>{title}</Text>
+        <View style={{ backgroundColor: brand.violet + "22", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 }}>
+          <Text style={{ color: brand.violet, fontWeight: "800", fontSize: 12 }}>COMING SOON</Text>
+        </View>
+      </View>
+      <Text style={[type.caption, { color: t.sub }]}>{body}</Text>
+    </View>
+  );
+}

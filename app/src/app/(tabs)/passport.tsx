@@ -1,6 +1,6 @@
 import { LinearGradient } from "expo-linear-gradient";
 import { Alert, Platform, Text, View } from "react-native";
-import { Button, Card, FadeIn, Screen, Title } from "../../components/ui";
+import { Button, Card, ComingSoon, FadeIn, Screen, Title } from "../../components/ui";
 import { stampEmoji } from "../../lib/cuisine";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
@@ -70,6 +70,8 @@ export default function Passport() {
           );
         })}
       </View>
+
+      <ComingSoon title="Your food map" body="A world map that lights up every country you've cooked from." />
 
       <Card style={{ marginTop: space.xl }}>
         <Text style={[type.caption, { color: t.sub }]}>Everything stays on this phone. No account needed.</Text>

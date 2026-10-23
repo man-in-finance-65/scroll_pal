@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
-import { Button, Card, FadeIn, Screen, SpeechBubble, Title } from "../../components/ui";
+import { Button, Card, ComingSoon, FadeIn, Screen, SpeechBubble, Title } from "../../components/ui";
 import { fx } from "../../lib/fx";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
@@ -83,6 +83,8 @@ export default function Add() {
         <Button title="Let me digest this link" onPress={go} disabled={!url.trim()} />
         <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each link I digest = +10 XP (3 a day max). 3 links = a level.</Text>
       </View>
+
+      <ComingSoon title="Watching Instagram & TikTok videos" body="For now I read the caption and page of those posts. Soon I'll watch the video itself, like I do with YouTube." />
 
       {s.jobs.length > 0 && (
         <View style={{ gap: space.sm }}>
