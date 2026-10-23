@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, Switch, Text, View } from "react-native";
 import { Pal } from "../../components/Pal";
-import { Bar, Button, Card, FadeIn, haptic, NumberCard, Ring, Screen, Segmented } from "../../components/ui";
+import { Bar, Button, Card, FadeIn, NumberCard, Ring, Screen, Segmented } from "../../components/ui";
 import { fx, setPref, useFxPrefs } from "../../lib/fx";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
@@ -17,9 +17,9 @@ const GOALS: { value: Goal; label: string }[] = [
   { value: "cut", label: "Cut" },
 ];
 const GOAL_LINE: Record<Goal, string> = {
-  bulk: "Bulk: Pal builds up and gets sturdier with every cook.",
-  maintain: "Maintain: Pal gets a little brighter with every cook.",
-  cut: "Cut: Pal gets leaner, lighter and floats higher with every cook.",
+  bulk: "Bulk: I build up and get sturdier with every cook.",
+  maintain: "Maintain: I get a little brighter with every cook.",
+  cut: "Cut: I get leaner, lighter and float higher with every cook.",
 };
 
 export default function PalHome() {
@@ -48,7 +48,7 @@ export default function PalHome() {
       </View>
 
       <View style={{ alignItems: "center", gap: space.md }}>
-        <Pressable onPress={() => { fx.done(); setPoke(true); }} accessibilityLabel="Poke Pal">
+        <Pressable onPress={() => { fx.tap(); setPoke(true); }} accessibilityLabel="Poke Pal">
           <Pal state={state} size={230} body={pal.body} level={p.level} energy={pal.mood.energy} />
         </Pressable>
         <Card style={{ alignSelf: "stretch", alignItems: "center", paddingVertical: space.md }}>
@@ -60,10 +60,10 @@ export default function PalHome() {
         <FadeIn>
           <Card>
             <Text style={[type.h2, { color: t.text }]}>How it works</Text>
-            <Step n={1} title="Paste a cooking video" body="Any YouTube Short. Pal watches it and writes the recipe." />
-            <Step n={2} title="Pick a plan" body="Bulk, cut or maintain. Pal plans your meals." />
-            <Step n={3} title="Cook it, tap Done" body="Pal cheers, and levels up when you really cook." />
-            <Button title="Paste your first video" onPress={() => router.navigate("/add")} style={{ marginTop: space.sm }} />
+            <Step n={1} title="Paste a cooking link" body="Any YouTube Short. I'll digest it and write the recipe." />
+            <Step n={2} title="Pick a plan" body="Bulk, cut or maintain. I'll plan your meals." />
+            <Step n={3} title="Cook it, tap Done" body="I cheer, and I level up when you really cook." />
+            <Button title="Paste your first link" onPress={() => router.navigate("/add")} style={{ marginTop: space.sm }} />
           </Card>
         </FadeIn>
       )}
@@ -117,20 +117,24 @@ export default function PalHome() {
       <Card>
         <Text style={[type.h2, { color: t.text }]}>How points work</Text>
         <Rule plus={`+${COOK_XP} XP`} color={brand.orange} title="Finish a cook" body="Tap Done on a meal you really made." />
-        <Rule plus={`+${SHARE_XP} XP`} color={brand.blue} title="Add a recipe" body={`Only the first ${SHARE_CAP_PER_DAY} each day count.`} />
-        <Rule plus={`${XP_PER_LEVEL} XP`} color={brand.violet} title="Next level" body="Every 30 XP, but only finishing a cook can level Pal up. Adding recipes alone never will." />
-        <Text style={[type.caption, { color: t.sub }]}>Skipping a cook never costs you XP or a level. Pal just gets sleepy until your next cook.</Text>
+        <Rule plus={`+${SHARE_XP} XP`} color={brand.blue} title="Let me digest a link" body={`Only the first ${SHARE_CAP_PER_DAY} each day count.`} />
+        <Rule plus={`${XP_PER_LEVEL} XP`} color={brand.violet} title="Next level" body="Every 30 XP, but only finishing a cook can level me up. Digesting links alone never will." />
+        <Text style={[type.caption, { color: t.sub }]}>Skipping a cook never costs you XP or a level. I just get sleepy until your next cook.</Text>
       </Card>
 
       <Card>
         <Text style={[type.h2, { color: t.text }]}>Got advice for me, pal?</Text>
-        <Text style={[type.caption, { color: t.sub }]}>Tell me what's good, what's confusing, or what I should learn next. I read every one.</Text>
-        <Button title="Talk to Pal" kind="secondary" onPress={() => router.push({ pathname: "/feedback", params: { m: "0" } })} />
+        <Text style={[type.caption, { color: t.sub }]}>Anything I should do better? Good, bad or weird, I want to hear it.</Text>
+        <Button title="Give me advice" kind="secondary" onPress={() => router.push({ pathname: "/feedback", params: { m: "0" } })} />
       </Card>
 
       <Card style={{ gap: 0 }}>
-        <ToggleRow label="Sounds" value={prefs.sound} onChange={(v) => { setPref("sound", v); if (v) fx.tick(); }} />
-        <ToggleRow label="Vibrations" value={prefs.vibration} onChange={(v) => { setPref("vibration", v); if (v) haptic.pop(); }} last />
+        <ToggleRow label="Sounds" value={prefs.sound} onChange={(v) => { setPref("sound", v); if (v) fx.tap(); }} />
+        <ToggleRow label="Vibrations" value={prefs.vibration} onChange={(v) => { setPref("vibration", v); if (v) fx.tap(); }} />
+        <View style={{ paddingTop: space.sm, gap: 6 }}>
+          <Button title="Test sound + vibration" kind="secondary" onPress={fx.test} feel="own" />
+          <Text style={[type.caption, { color: t.sub }]}>Can't hear anything? Turn your volume up and check the silent switch. Vibrations still work in silent mode.</Text>
+        </View>
       </Card>
     </Screen>
   );

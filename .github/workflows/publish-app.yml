@@ -8,6 +8,17 @@ on:
     branches: [claude/gracious-keller-6lrp79]
     paths: ["app/**", ".github/workflows/publish-app.yml"]
   workflow_dispatch:
+    inputs:
+      api_url:
+        description: "Where Pal's server lives, e.g. https://scrollpal-api-xxxx-uc.a.run.app (leave empty to use app/.api-url)"
+        required: false
+        default: ""
+  workflow_call:
+    inputs:
+      api_url:
+        type: string
+        required: false
+        default: ""
 
 jobs:
   publish:
@@ -17,8 +28,8 @@ jobs:
         working-directory: app
     env:
       EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
-      # Where the phone finds the API. Set the repo variable API_URL after the API is deployed.
-      EXPO_PUBLIC_API_URL: ${{ vars.API_URL }}
+      API_URL_INPUT: ${{ inputs.api_url }}
+      API_URL_VAR: ${{ vars.API_URL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -29,11 +40,17 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npm test
-      - name: Warn if the API is not set
+      - name: Work out where Pal's server is
         run: |
-          if [ -z "$EXPO_PUBLIC_API_URL" ]; then
-            echo "::warning::Repo variable API_URL is empty. The app will publish, but Pal cannot reach a server yet."
+          # Priority: the address typed into this run > repo variable API_URL > the committed file app/.api-url
+          URL="${API_URL_INPUT:-${API_URL_VAR:-}}"
+          if [ -z "$URL" ] && [ -f .api-url ]; then URL="$(tr -d '[:space:]' < .api-url)"; fi
+          if [ -z "$URL" ]; then
+            echo "::warning::No server address found. The app will publish, but links and Pal chat will say the server isn't connected yet."
+          else
+            echo "Server address: $URL"
           fi
+          echo "EXPO_PUBLIC_API_URL=$URL" >> "$GITHUB_ENV"
       - name: Who am I
         run: npx -y eas-cli@latest whoami
       - name: Link EAS project (slug scroll-pal)

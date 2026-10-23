@@ -15,7 +15,7 @@ export default function Checklist() {
     <Screen padTop={false}>
       <Card style={{ backgroundColor: brand.orange + "1F" }}>
         <Text style={[type.label, { color: brand.orange }]}>Checklist, not a real cart</Text>
-        <Text style={[type.body, { color: t.text }]}>Pal doesn't buy or send anything. Tick items off as you shop.</Text>
+        <Text style={[type.body, { color: t.text }]}>I don't buy or send anything. Tick items off as you shop.</Text>
       </Card>
 
       <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
@@ -26,7 +26,7 @@ export default function Checklist() {
       </View>
       {batches > 0 && (
         <Text style={[type.caption, { color: t.sub }]}>
-          Amounts cover {batches} {batches === 1 ? "batch" : "batches"} (one per planned cook). ~ = Pal's estimate.
+          Amounts cover {batches} {batches === 1 ? "batch" : "batches"} (one per planned cook). ~ = my estimate.
         </Text>
       )}
 
@@ -37,7 +37,7 @@ export default function Checklist() {
           {s.checklist.map((c, i) => (
             <Pressable
               key={i}
-              onPress={() => { if (!c.checked) fx.tick(); else fx.tap(); s.toggleItem(i); }}
+              onPress={() => { fx.tap(); s.toggleItem(i); }}
               style={{ flexDirection: "row", alignItems: "center", gap: space.md, paddingVertical: 12, borderTopWidth: i ? 1 : 0, borderColor: t.line }}
             >
               <View

@@ -15,6 +15,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.addr.outputs.url }}
     env:
       GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
@@ -62,12 +64,21 @@ jobs:
           rm -f env.json
 
       - name: Print the address
+        id: addr
         run: |
           URL=$(gcloud run services describe scrollpal-api --project "$GCP_PROJECT_ID" --region us-central1 --format 'value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "API + landing page: $URL"
           curl -fsS "$URL/healthz"
           {
             echo "### API deployed"
             echo "- Landing page: $URL"
-            echo "- Set the repo **variable** \`API_URL\` to \`$URL\` (Settings -> Secrets and variables -> Actions -> Variables), then re-run 'Publish app to Expo Go'."
+            echo "- The app is being re-published with this address automatically (next job)."
           } >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs: deploy
+    uses: ./.github/workflows/publish-app.yml
+    with:
+      api_url: ${{ needs.deploy.outputs.url }}
+    secrets: inherit

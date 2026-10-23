@@ -10,7 +10,7 @@ export class ApiError extends Error {
 }
 
 async function post<T>(path: string, body: unknown, timeoutMs = 90_000): Promise<T> {
-  if (!BASE) throw new ApiError("no_server", "Pal's server isn't connected yet. Whoever set up this app needs to finish deploying it.");
+  if (!BASE) throw new ApiError("no_server", "I'm not connected to my server yet. Whoever set up this app needs to finish deploying it.");
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   let res: Response;
@@ -22,7 +22,7 @@ async function post<T>(path: string, body: unknown, timeoutMs = 90_000): Promise
       signal: ctrl.signal,
     });
   } catch {
-    throw new ApiError("offline", "Pal can't reach the server. Check your connection and try again.");
+    throw new ApiError("offline", "I can't reach my server. Check your connection and try again.");
   } finally {
     clearTimeout(timer);
   }

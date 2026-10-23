@@ -10,7 +10,7 @@ import { useStore } from "../lib/store";
 import { radius, space, type, useTheme } from "../lib/theme";
 import { usePal } from "../lib/usePal";
 
-// Pal asks for advice the way you'd ask a friend. No form, no "rate us": one question at a time,
+// Pal asks for advice like a mate would. No form, no "rate us": one question at a time,
 // tap an answer or say it in your own words. Each answer is saved on its own, so nothing is lost if you close it.
 type Step = { id: string; ask: string; chips: string[]; text?: boolean; hint?: string };
 
@@ -27,7 +27,7 @@ const FLOWS: Record<number, Step[]> = {
       ask: "Thanks for being straight with me. What would make it a big yes?",
       chips: ["Faster", "More recipes", "Prettier", "Fix something"],
       text: true,
-      hint: "Or tell me like you'd tell a friend…",
+      hint: "Or type your own idea…",
     },
   ],
   // After the 3rd cook: a proper catch-up.
@@ -42,17 +42,17 @@ const FLOWS: Record<number, Step[]> = {
       ask: "If you were me, what's the ONE thing you'd change?",
       chips: ["Make it faster", "More recipes", "Make it prettier", "Something's broken", "Nothing, keep going!"],
       text: true,
-      hint: "Or say it in your own words…",
+      hint: "Or type your own idea…",
     },
   ],
   // Any time: from the Pal tab.
   0: [
     {
       id: "open",
-      ask: "What's on your mind, pal? Tell me like you'd tell a friend.",
+      ask: "What's on your mind, pal? Good, bad or random, I'm all ears.",
       chips: ["I love something", "Something confused me", "I found a bug", "I have an idea"],
       text: true,
-      hint: "Type anything…",
+      hint: "Type it here…",
     },
   ],
 };
@@ -139,13 +139,13 @@ export default function Feedback() {
 
         {typing && (
           <View style={bubble(false)}>
-            <Text style={[type.body, { color: t.sub }]}>Pal is reading…</Text>
+            <Text style={[type.body, { color: t.sub }]}>Noting that down…</Text>
           </View>
         )}
 
         {failed && (
           <View style={{ gap: space.sm }}>
-            <Text style={[type.caption, { color: t.danger }]}>I couldn't reach my notebook just now. Your answer is still here.</Text>
+            <Text style={[type.caption, { color: t.danger }]}>I couldn't save that just now. Your answer is still here.</Text>
             <Button title="Try again" kind="secondary" onPress={() => answer(failed.step, failed.answer)} />
           </View>
         )}

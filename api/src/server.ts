@@ -33,7 +33,7 @@ app.post("/v1/ingest", async (req: Request, res: Response) => {
   } catch (e) {
     if (e instanceof IngestError) return res.status(e.status).json({ error: e.code, message: e.message });
     console.error("ingest crashed", e);
-    res.status(500).json({ error: "server_error", message: "Something broke on Pal's side. Try again." });
+    res.status(500).json({ error: "server_error", message: "Something upset my tummy. Try again in a moment." });
   }
 });
 
@@ -51,7 +51,7 @@ app.post("/v1/plan", async (req: Request, res: Response) => {
     res.json(plan);
   } catch (e) {
     console.error("plan failed", e);
-    res.status(502).json({ error: "plan_failed", message: "Pal couldn't build the plan just now. Try again in a moment." });
+    res.status(502).json({ error: "plan_failed", message: "I couldn't dream up a plan just now. Try again in a moment." });
   }
 });
 

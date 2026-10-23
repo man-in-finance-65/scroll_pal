@@ -11,7 +11,7 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: "sparkles", selected: "sparkles" }} md="auto_awesome" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="add">
-        <NativeTabs.Trigger.Label>Add</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Digest</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "plus.circle", selected: "plus.circle.fill" }} md="add_circle" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">

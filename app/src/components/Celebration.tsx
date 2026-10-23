@@ -11,9 +11,9 @@ import { Pal } from "./Pal";
 import { Button } from "./ui";
 
 const GROW: Record<string, string> = {
-  bulk: "Pal is building up.",
-  cut: "Pal is getting leaner and lighter.",
-  maintain: "Pal is glowing a little brighter.",
+  bulk: "I'm building up!",
+  cut: "I'm getting leaner and lighter!",
+  maintain: "I'm glowing a little brighter!",
 };
 
 // Full-screen moment after a level-up or a new passport stamp. Also hands off to the

@@ -37,11 +37,11 @@ export default function PlanScreen() {
   if (!plan) {
     return (
       <Screen>
-        <Title sub="Open a recipe and tap Build my plan.">Plan</Title>
+        <Title sub="Open a recipe and tap Plan my meals.">Plan</Title>
         <View style={{ alignItems: "center", paddingVertical: space.xl }}>
           <Pal state="listening" size={160} body={pal.body} level={pal.level} />
         </View>
-        <Button title={s.recipe ? "Open your recipe" : "Paste a cooking video"} onPress={() => router.push(s.recipe ? "/recipe" : "/add")} />
+        <Button title={s.recipe ? "Open your recipe" : "Paste a cooking link"} onPress={() => router.push(s.recipe ? "/recipe" : "/add")} />
       </Screen>
     );
   }
@@ -140,8 +140,8 @@ function SlotCard({ slot, onDone, onSkip }: { slot: PlanSlot; onDone: () => void
         {slot.note ? <Text style={[type.caption, { color: t.sub }]}>{slot.note}</Text> : null}
         {slot.kind === "cook" && slot.status === "planned" && (
           <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.xs }}>
-            <Button title="Done" kind="success" onPress={done} style={{ flex: 2 }} />
-            <Button title="Skip" kind="secondary" onPress={onSkip} style={{ flex: 1 }} />
+            <Button title="Done" kind="success" feel="own" onPress={done} style={{ flex: 2 }} />
+            <Button title="Skip" kind="secondary" feel="own" onPress={onSkip} style={{ flex: 1 }} />
           </View>
         )}
       </Card>

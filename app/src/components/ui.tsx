@@ -6,9 +6,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
 import { brand, radius, space, type, useTheme } from "../lib/theme";
 
-// Sound + vibration live in lib/fx.ts. Re-exported so screens keep one import.
-import { haptic } from "../lib/fx";
-export { haptic };
+import { fx } from "../lib/fx";
 
 export function Screen({ children, scroll = true, padTop = true }: { children: ReactNode; scroll?: boolean; padTop?: boolean }) {
   const t = useTheme();
@@ -65,9 +63,11 @@ export function NumberCard({ label, value, unit, color, math, style }: { label: 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // Every button springs when pressed.
+// Every press also feels like a tap in the streak (light knock, firmer double, heavy triple). Buttons that make
+// their own sound (Done, Skip) pass feel="own" so the sounds don't stack.
 export function Button({
-  title, onPress, kind = "primary", loading, disabled, style, icon,
-}: { title: string; onPress: () => void; kind?: "primary" | "secondary" | "ghost" | "success"; loading?: boolean; disabled?: boolean; style?: ViewStyle; icon?: ReactNode }) {
+  title, onPress, kind = "primary", loading, disabled, style, icon, feel = "tap",
+}: { title: string; onPress: () => void; kind?: "primary" | "secondary" | "ghost" | "success"; loading?: boolean; disabled?: boolean; style?: ViewStyle; icon?: ReactNode; feel?: "tap" | "own" }) {
   const t = useTheme();
   const s = useSharedValue(1);
   const anim = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
@@ -85,7 +85,7 @@ export function Button({
       disabled={off}
       onPressIn={() => (s.value = withSpring(0.95, { damping: 15, stiffness: 400 }))}
       onPressOut={() => (s.value = withSpring(1, { damping: 8, stiffness: 300 }))}
-      onPress={onPress}
+      onPress={() => { if (feel === "tap") fx.tap(); onPress(); }}
       style={[anim, { opacity: off ? 0.55 : 1, borderRadius: radius.md, overflow: "hidden" }, style]}
     >
       {kind === "primary" ? (
@@ -108,7 +108,7 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
         return (
           <Pressable
             key={o.value}
-            onPress={() => { haptic.tap(); onChange(o.value); }}
+            onPress={() => { fx.tap(); onChange(o.value); }}
             style={{ flex: 1, paddingVertical: 10, borderRadius: 10, backgroundColor: on ? t.card : "transparent", alignItems: "center" }}
           >
             <Text style={{ color: on ? t.text : t.sub, fontWeight: on ? "700" : "500", fontSize: 15 }}>{o.label}</Text>

@@ -45,11 +45,11 @@ export type Mood = { energy: number; label: string; line: string };
 export function mood(slow: boolean, weekCooks: number, target: number, totalCooks: number): Mood {
   const ratio = Math.min(1, weekCooks / target);
   const energy = slow ? 0.25 : 0.45 + 0.55 * ratio;
-  if (slow) return { energy, label: "Slow", line: "Missed one. No stress, your level is safe. Cook one meal to wake me up." };
-  if (totalCooks === 0) return { energy, label: "Curious", line: "Paste a cooking video and let's make it real." };
-  if (ratio >= 1) return { energy, label: "Fired up", line: "Week goal hit. You're on a roll!" };
+  if (slow) return { energy, label: "Slow", line: "I'm feeling slow after a missed cook. My level is safe though. Cook one meal and I'll wake right up." };
+  if (totalCooks === 0) return { energy, label: "Curious", line: "Paste a cooking link and let me digest it." };
+  if (ratio >= 1) return { energy, label: "Fired up", line: "Week goal hit! I'm so fired up." };
   if (weekCooks > 0) return { energy, label: "Happy", line: `${target - weekCooks} more ${target - weekCooks === 1 ? "cook" : "cooks"} to close the ring.` };
-  return { energy, label: "Hungry", line: "Nothing cooked yet this week. Pick a meal from your plan." };
+  return { energy, label: "Hungry", line: "Nothing cooked yet this week. Pick a meal from your plan?" };
 }
 
 // How Pal's body looks. Bulk builds up (broader, sturdier); cut gets leaner and lighter

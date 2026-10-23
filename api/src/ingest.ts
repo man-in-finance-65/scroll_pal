@@ -9,7 +9,7 @@ export class IngestError extends Error {
   }
 }
 
-const CAPTION_ASK = "Pal couldn't read this video. Paste the caption text and Pal will try from that.";
+const CAPTION_ASK = "That link was too hard to digest. Paste the caption and I'll try that instead.";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function callOnce(input: { youtubeUrl?: string; caption?: string }): Promise<Recipe> {
@@ -41,7 +41,7 @@ async function withRetry(input: { youtubeUrl?: string; caption?: string }): Prom
 export async function ingest(url: string, caption?: string): Promise<{ recipe: Recipe; cached: boolean }> {
   const ytId = youtubeId(url);
   if (!ytId && !caption) {
-    throw new IngestError(422, "caption_needed", "Pal can only watch YouTube links for now. Paste the caption text and Pal will read that.");
+    throw new IngestError(422, "caption_needed", "I can only watch YouTube links for now. Paste the caption and I'll digest that.");
   }
   // Caption text changes the answer, so it is part of the cache key.
   const key = urlHash(url) + (caption ? ":" + urlHash(caption) : "");
@@ -50,7 +50,7 @@ export async function ingest(url: string, caption?: string): Promise<{ recipe: R
 
   const recipe = await withRetry({ youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption });
   if (recipe.confidence < 0.2) {
-    throw new IngestError(422, "not_a_recipe", "Pal couldn't find a recipe in this one. If it is a recipe, paste the caption text.");
+    throw new IngestError(422, "not_a_recipe", "I couldn't find a recipe in that one. If there is one, paste the caption and I'll take another bite.");
   }
   cache.set(key, recipe);
   return { recipe, cached: false };

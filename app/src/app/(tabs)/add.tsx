@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
-import { Button, Card, FadeIn, haptic, Screen, Title } from "../../components/ui";
+import { Button, Card, FadeIn, Screen, Title } from "../../components/ui";
 import { fx } from "../../lib/fx";
 import { api, ApiError } from "../../lib/api";
 import type { PalState } from "../../lib/mood";
@@ -27,7 +27,7 @@ export default function Add() {
   async function paste() {
     const text = await Clipboard.getStringAsync().catch(() => "");
     if (text) {
-      haptic.tap();
+      fx.tap();
       setUrl(text.trim());
     }
   }
@@ -71,12 +71,12 @@ export default function Add() {
 
   return (
     <Screen>
-      <Title sub="Paste a YouTube Shorts cooking link. Pal watches it and writes the recipe down.">Add a recipe</Title>
+      <Title sub="Paste a cooking video link and I'll digest it into a recipe.">Got a link?</Title>
 
       <View style={{ alignItems: "center" }}>
         <Pal state={state} size={150} body={pal.body} level={pal.level} energy={pal.mood.energy} />
         <Text style={[type.caption, { color: t.sub, marginTop: 4 }]}>
-          {busy ? "Pal is watching the video…" : happy ? "Got it!" : error ? "Hmm, that didn't work." : "Listening…"}
+          {busy ? "Digesting… give me a sec" : happy ? "Mmm, digested!" : error ? "That one was hard to digest." : "Ready when you are"}
         </Text>
       </View>
 
@@ -110,11 +110,11 @@ export default function Add() {
         {needCaption && (
           <FadeIn>
             <View style={{ gap: space.sm }}>
-              <Text style={[type.label, { color: t.sub }]}>Caption text</Text>
+              <Text style={[type.label, { color: t.sub }]}>Caption</Text>
               <TextInput
                 value={caption}
                 onChangeText={setCaption}
-                placeholder="Open the video, copy its caption or description, paste it here."
+                placeholder="Copy the video's caption or description and paste it here."
                 placeholderTextColor={t.faint}
                 multiline
                 style={[inputStyle, { minHeight: 120, textAlignVertical: "top" }]}
@@ -124,12 +124,12 @@ export default function Add() {
         )}
 
         <Button
-          title={busy ? "Pal is reading…" : needCaption ? "Try with the caption" : "Make it a recipe"}
+          title={busy ? "Digesting…" : needCaption ? "Let me digest the caption" : "Let me digest this link"}
           onPress={go}
           loading={busy}
           disabled={!url.trim() || (needCaption && !caption.trim())}
         />
-        <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each new recipe = +1 XP (up to 3 a day).</Text>
+        <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each link I digest = +1 XP (3 a day max).</Text>
       </View>
 
       {s.recipes.length > 0 && (
