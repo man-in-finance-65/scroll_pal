@@ -42,18 +42,31 @@ app.post("/v1/plan", async (req: Request, res: Response) => {
   const body = PlanBody.safeParse(req.body);
   if (!body.success) return bad(res, "Send {recipe, goal: bulk|cut|maintain, days: 1-7}.");
   const { recipe, goal, days } = body.data;
-  try {
-    let plan;
-    if (process.env.MOCK_AI === "1") plan = mockPlan(goal, days);
-    else if (!process.env.ANTHROPIC_API_KEY) {
-      console.warn("plan: ANTHROPIC_API_KEY not set, using the simple built-in planner");
+  // Claude writes the smartest plan. If it isn't set up, or it fails for any reason, the built-in planner still
+  // gives a good plan, so nobody is ever stuck here. The reason is logged and returned for the owner.
+  let plan;
+  let planner = "claude";
+  let note: string | undefined;
+  if (process.env.MOCK_AI === "1") {
+    plan = mockPlan(goal, days);
+    planner = "mock";
+  } else if (!process.env.ANTHROPIC_API_KEY) {
+    plan = simplePlan(recipe, goal, days);
+    planner = "built-in";
+    note = "ANTHROPIC_API_KEY is not set";
+  } else {
+    try {
+      plan = await buildPlan(recipe, goal, days);
+    } catch (e) {
+      let text = String((e as Error)?.message ?? e);
+      try { text = JSON.parse(text)?.error?.message ?? text; } catch {}
+      note = text.replace(/sk-[A-Za-z0-9_-]{10,}/g, "***").replace(/\s+/g, " ").slice(0, 220);
+      console.warn(`plan: Claude failed, using the built-in planner: ${note}`);
       plan = simplePlan(recipe, goal, days);
-    } else plan = await buildPlan(recipe, goal, days);
-    res.json(plan);
-  } catch (e) {
-    console.error("plan failed", e);
-    res.status(502).json({ error: "plan_failed", message: "I couldn't dream up a plan just now. Try again in a moment." });
+      planner = "built-in";
+    }
   }
+  res.json({ ...plan, planner, note });
 });
 
 // One line per tap, so you can count them in Cloud Run logs:  grep "EVENT type=done"
