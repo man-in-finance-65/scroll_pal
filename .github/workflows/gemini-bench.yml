@@ -3,6 +3,9 @@ name: Gemini speed test
 # Manual. Times how long Gemini takes to read real recipe Shorts with different settings, using the GEMINI_TOKEN secret.
 # Costs a few cents. Results are in the run log. The key is never printed.
 on:
+  push:
+    branches: [claude/gracious-keller-6lrp79]
+    paths: [".github/workflows/gemini-bench.yml", "api/scripts/bench.ts"]
   workflow_dispatch:
     inputs:
       urls:
