@@ -2,7 +2,8 @@ import { PalResult } from './types';
 
 // Tried in order; busy or rate-limited models fall through to the next one.
 const MODELS = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.5-flash-lite'];
-const ROUNDS = 3;
+const ROUNDS = 2;
+const TIMEOUT_MS = 15000;
 const RETRYABLE = new Set([429, 500, 502, 503, 504]);
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -36,9 +37,10 @@ export type PalInput = {
   url?: string;
   caption?: string;
   image?: { base64: string; mimeType: string };
+  onStatus?: (msg: string) => void;
 };
 
-export async function askPal({ apiKey, url, caption, image }: PalInput): Promise<PalResult> {
+export async function askPal({ apiKey, url, caption, image, onStatus }: PalInput): Promise<PalResult> {
   const parts: object[] = [{ text: PROMPT }];
   if (url) parts.push({ text: `Reel link: ${url}` });
   if (caption) parts.push({ text: `Caption / notes: ${caption}` });
@@ -52,14 +54,23 @@ export async function askPal({ apiKey, url, caption, image }: PalInput): Promise
   let lastError = 'Gemini is busy. Try again in a minute.';
   for (let round = 0; round < ROUNDS; round++) {
     for (const model of MODELS) {
+      onStatus?.(round === 0 && model === MODELS[0] ? 'Pal is reading your reel…' : 'Gemini is busy, trying another route…');
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
       const res = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
           body: payload,
+          signal: ctl.signal,
         },
-      );
+      ).catch(() => null);
+      clearTimeout(timer);
+      if (!res) {
+        lastError = 'Gemini took too long to answer.';
+        continue;
+      }
       const body = await res.json().catch(() => ({}));
       if (res.ok) {
         const text = body?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -69,7 +80,7 @@ export async function askPal({ apiKey, url, caption, image }: PalInput): Promise
       lastError = body?.error?.message ?? `Gemini error ${res.status}`;
       if (!RETRYABLE.has(res.status) && res.status !== 404) throw new Error(lastError);
     }
-    await sleep(1500 * (round + 1));
+    await sleep(1000);
   }
   throw new Error(lastError);
 }

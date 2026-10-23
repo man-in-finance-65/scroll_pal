@@ -159,6 +159,7 @@ function NewPod({ onCancel, onCreated }: { onCancel: () => void; onCreated: (pod
   const [caption, setCaption] = useState('');
   const [image, setImage] = useState<{ uri: string; base64: string; mimeType: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [status, setStatus] = useState('');
 
   const pasteLink = async () => setUrl((await Clipboard.getStringAsync()).trim());
 
@@ -184,6 +185,7 @@ function NewPod({ onCancel, onCreated }: { onCancel: () => void; onCreated: (pod
     try {
       const r = await askPal({
         apiKey,
+        onStatus: setStatus,
         url: url || undefined,
         caption: caption || undefined,
         image: image ? { base64: image.base64, mimeType: image.mimeType } : undefined,
@@ -238,7 +240,10 @@ function NewPod({ onCancel, onCreated }: { onCancel: () => void; onCreated: (pod
       </ScrollView>
       <View style={s.footer}>
         {busy ? (
-          <ActivityIndicator size="large" />
+          <View style={{ alignItems: 'center', gap: 8 }}>
+            <ActivityIndicator size="large" />
+            <Text style={s.hint}>{status || 'Pal is reading your reel…'}</Text>
+          </View>
         ) : (
           <Button label="Ask Pal" onPress={submit} disabled={!hasInput} />
         )}
