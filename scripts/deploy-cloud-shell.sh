@@ -64,7 +64,7 @@ gcloud run deploy scrollpal-api \
 URL=$(gcloud run services describe scrollpal-api --region "$REGION" --format 'value(status.url)')
 echo
 echo "Checking it is alive..."
-curl -fsS "$URL/healthz" && echo
+curl -fsS "$URL/health" && echo
 echo
 echo "=============================================="
 echo " Pal's server + landing page:  $URL"

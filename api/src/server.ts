@@ -21,7 +21,8 @@ app.use((req, res, next) => {
 
 const bad = (res: Response, message: string) => res.status(400).json({ error: "bad_request", message });
 
-app.get("/healthz", (_req, res) => res.json({ ok: true, mock: process.env.MOCK_AI === "1" }));
+// Not "/healthz": Google Cloud Run reserves that path and answers it with its own 404.
+app.get("/health", (_req, res) => res.json({ ok: true, mock: process.env.MOCK_AI === "1" }));
 
 app.post("/v1/ingest", async (req: Request, res: Response) => {
   const body = IngestBody.safeParse(req.body);

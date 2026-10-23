@@ -6,10 +6,8 @@ name: Deploy API to Cloud Run
 #   GEMINI_TOKEN                    reads the videos (already set)
 #   ANTHROPIC_API_KEY               optional: builds smarter plans. Without it Pal uses a simple built-in plan.
 #   SHEET_WEBHOOK_URL, SHEET_SECRET optional: saves "yes" counts and feedback to the private Google Sheet.
+# Manual only. The easy way to deploy is scripts/deploy-cloud-shell.sh (see DEPLOY.md); use this if you set up GCP_SA_KEY.
 on:
-  push:
-    branches: [claude/gracious-keller-6lrp79]
-    paths: ["api/**", ".github/workflows/deploy-api.yml"]
   workflow_dispatch:
 
 jobs:
@@ -69,7 +67,7 @@ jobs:
           URL=$(gcloud run services describe scrollpal-api --project "$GCP_PROJECT_ID" --region us-central1 --format 'value(status.url)')
           echo "url=$URL" >> "$GITHUB_OUTPUT"
           echo "API + landing page: $URL"
-          curl -fsS "$URL/healthz"
+          curl -fsS "$URL/health"
           {
             echo "### API deployed"
             echo "- Landing page: $URL"

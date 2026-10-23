@@ -43,9 +43,15 @@ You need a Google Cloud project with billing turned on (Google gives free credit
 
 Your landing page is that same address. Open it on your phone.
 
-Check it: `curl https://YOUR-ADDRESS/healthz` shows `{"ok":true,"mock":false}`.
+Check it: `curl https://YOUR-ADDRESS/health` shows `{"ok":true,"mock":false}`. (Not `/healthz`: Google reserves that one.)
 
 **Alternative: let GitHub deploy for you.** Needs the secrets `GCP_PROJECT_ID` and `GCP_SA_KEY` (run `bash scripts/gcp-setup.sh YOUR_PROJECT_ID` in Cloud Shell to create the key). Then GitHub → **Actions → Deploy API to Cloud Run → Run workflow**. It deploys and re-publishes the app with the new address by itself. If a run says "Missing GCP_PROJECT_ID or GCP_SA_KEY", GitHub can't see those secrets (check the name and that they're **Repository** secrets, not Environment secrets).
+
+**Updating the server later** (after I change the API code). In Cloud Shell, inside the `scroll_pal` folder:
+```bash
+git pull origin claude/gracious-keller-6lrp79 && gcloud run deploy scrollpal-api --source api --region us-central1 --quiet
+```
+It keeps your keys and settings. No questions asked.
 
 **Remember the address for every future publish:** put it in a file called `app/.api-url` (just the address, one line), or set a repo variable `API_URL`. Otherwise later publishes ship an app with no server.
 
