@@ -1,6 +1,7 @@
 import { cache, normalizeUrl, urlHash, youtubeId } from "./cache.js";
 import { readRecipe, type GeminiInfo } from "./gemini.js";
 import { MOCK_RECIPE } from "./mock.js";
+import { pageToCaption, readPage } from "./page.js";
 import type { Recipe } from "./schema.js";
 
 export class IngestError extends Error {
@@ -10,6 +11,7 @@ export class IngestError extends Error {
 }
 
 const CAPTION_ASK = "That link was too hard to digest. Paste the caption and I'll try that instead.";
+const HIDDEN_ASK = "That one was hard to digest. The site keeps its caption to itself. Copy the caption and paste it below, and I'll take it from there.";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Attempt 1 uses the main model. Attempt 2 (the one retry) uses a smaller, faster model with a shorter limit.
@@ -58,20 +60,36 @@ async function withRetry(input: { youtubeUrl?: string; caption?: string }): Prom
   throw new IngestError(502, "gemini_failed", CAPTION_ASK, detail);
 }
 
-export async function ingest(url: string, caption?: string): Promise<{ recipe: Recipe; cached: boolean; info?: GeminiInfo }> {
+export type Digested = Recipe & { image: string | null; source_url: string };
+
+export async function ingest(url: string, caption?: string): Promise<{ recipe: Digested; cached: boolean; info?: GeminiInfo }> {
   const ytId = youtubeId(url);
-  if (!ytId && !caption) {
-    throw new IngestError(422, "caption_needed", "I can only watch YouTube links for now. Paste the caption and I'll digest that.");
-  }
   // Caption text changes the answer, so it is part of the cache key.
   const key = urlHash(url) + (caption ? ":" + urlHash(caption) : "");
-  const hit = cache.get<Recipe>(key);
+  const hit = cache.get<Digested>(key);
   if (hit) return { recipe: hit, cached: true };
 
-  const { recipe, info } = await withRetry({ youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption });
+  // YouTube: Gemini watches the video itself. Anything else: Pal reads the page (caption, recipe data, text),
+  // plus whatever the user pasted.
+  let image: string | null = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
+  let text = caption;
+  if (!ytId) {
+    if (!/^https?:\/\//i.test(url.trim())) throw new IngestError(422, "bad_link", "That doesn't look like a link. Paste the full address, starting with https://");
+    const page = process.env.MOCK_AI === "1" ? null : await readPage(url).catch(() => null);
+    if (page) {
+      image = page.image;
+      const body = pageToCaption(page, caption && `Caption pasted by the user: ${caption}`);
+      // Almost nothing readable (a login wall, a video-only page): ask for the caption instead of guessing.
+      text = body.replace(/Title: [^\n]*\n?/, "").trim().length >= 40 || caption ? body : undefined;
+    }
+    if (!text && process.env.MOCK_AI !== "1") throw new IngestError(422, "caption_needed", HIDDEN_ASK);
+  }
+
+  const { recipe, info } = await withRetry({ youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption: text });
   if (recipe.confidence < 0.2) {
     throw new IngestError(422, "not_a_recipe", "I couldn't find a recipe in that one. If there is one, paste the caption and I'll take another bite.");
   }
-  cache.set(key, recipe);
-  return { recipe, cached: false, info };
+  const out: Digested = { ...recipe, image, source_url: url.trim() };
+  cache.set(key, out);
+  return { recipe: out, cached: false, info };
 }

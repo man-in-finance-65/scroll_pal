@@ -1,35 +1,29 @@
 import * as Clipboard from "expo-clipboard";
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
-import { Keyboard, Pressable, Text, TextInput, View } from "react-native";
+import { useState } from "react";
+import { ActivityIndicator, Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
-import { Button, Card, FadeIn, Screen, Title } from "../../components/ui";
+import { Button, Card, FadeIn, Screen, SpeechBubble, Title } from "../../components/ui";
 import { fx } from "../../lib/fx";
-import { api, ApiError } from "../../lib/api";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
 import { radius, space, type, useTheme } from "../../lib/theme";
+import type { Job } from "../../lib/types";
 import { usePal } from "../../lib/usePal";
+
+// Errors where pasting the caption can still save the day.
+const CAPTION_CODES = ["gemini_failed", "caption_needed", "not_a_recipe"];
+const host = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return u.slice(0, 30); } };
 
 export default function Add() {
   const t = useTheme();
   const s = useStore();
   const pal = usePal();
   const [url, setUrl] = useState("");
-  const [caption, setCaption] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<string | null>(null);
-  const [needCaption, setNeedCaption] = useState(false);
-  const [happy, setHappy] = useState(false);
-  const [waited, setWaited] = useState(0); // seconds Pal has been digesting
-  useEffect(() => {
-    if (!busy) { setWaited(0); return; }
-    const id = setInterval(() => setWaited((w) => w + 1), 1000);
-    return () => clearInterval(id);
-  }, [busy]);
 
-  const state: PalState = busy ? "thinking" : happy ? "excited" : error ? "slow" : "listening";
+  const busy = s.jobs.some((j) => j.status === "digesting");
+  const lastFailed = s.jobs.find((j) => j.status === "failed");
+  const state: PalState = busy ? "thinking" : lastFailed ? "slow" : "listening";
 
   async function paste() {
     const text = await Clipboard.getStringAsync().catch(() => "");
@@ -39,33 +33,13 @@ export default function Add() {
     }
   }
 
-  async function go() {
-    if (!url.trim()) return;
+  // Starts a digest and frees the box straight away, so another link can go in while Pal chews on this one.
+  function go() {
+    const link = url.trim();
+    if (!link) return;
     Keyboard.dismiss();
-    setBusy(true);
-    setError(null);
-    setDetail(null);
-    try {
-      const recipe = await api.ingest(url.trim(), needCaption && caption.trim() ? caption.trim() : undefined);
-      fx.ready();
-      setHappy(true);
-      s.addShare(recipe);
-      setTimeout(() => {
-        setHappy(false);
-        setUrl("");
-        setCaption("");
-        setNeedCaption(false);
-        router.push("/recipe");
-      }, 700);
-    } catch (e) {
-      fx.error();
-      const err = e as ApiError;
-      setError(err.message);
-      setDetail(err.detail ?? null);
-      if (["gemini_failed", "caption_needed", "not_a_recipe"].includes(err.code)) setNeedCaption(true);
-    } finally {
-      setBusy(false);
-    }
+    s.digest(link);
+    setUrl("");
   }
 
   const inputStyle = {
@@ -80,13 +54,12 @@ export default function Add() {
 
   return (
     <Screen>
-      <Title sub="Paste a cooking video link and I'll digest it into a recipe.">Got a link?</Title>
+      <Title sub="Paste any cooking link: YouTube, Instagram, TikTok, a recipe site. Paste another while I chew.">Got a link?</Title>
 
-      <View style={{ alignItems: "center" }}>
+      <View style={{ alignItems: "center", gap: space.sm }}>
+        {lastFailed && !busy ? <SpeechBubble>Mmm… that was difficult to digest.</SpeechBubble> : null}
+        {busy ? <SpeechBubble>{s.jobs.filter((j) => j.status === "digesting").length > 1 ? "Chewing a few at once…" : "Mmm, chewing on this one…"}</SpeechBubble> : null}
         <Pal state={state} size={150} body={pal.body} level={pal.level} energy={pal.mood.energy} />
-        <Text style={[type.caption, { color: t.sub, marginTop: 4 }]}>
-          {busy ? (waited < 15 ? "Digesting… give me a sec" : waited < 45 ? `Still digesting… ${waited}s. Videos take a bit.` : `Still on it… ${waited}s. Long videos are chewy.`) : happy ? "Mmm, digested!" : error ? "That one was hard to digest." : "Ready when you are"}
-        </Text>
       </View>
 
       <View style={{ gap: space.sm }}>
@@ -94,7 +67,7 @@ export default function Add() {
           <TextInput
             value={url}
             onChangeText={setUrl}
-            placeholder="https://youtube.com/shorts/…"
+            placeholder="https://…"
             placeholderTextColor={t.faint}
             autoCapitalize="none"
             autoCorrect={false}
@@ -107,40 +80,16 @@ export default function Add() {
             <Text style={{ color: t.tint, fontWeight: "700", fontSize: 16 }}>Paste</Text>
           </Pressable>
         </View>
-
-        {error && (
-          <FadeIn>
-            <Card style={{ borderWidth: 1, borderColor: t.danger + "55" }}>
-              <Text style={[type.body, { color: t.text }]}>{error}</Text>
-              {detail ? <Text style={[type.caption, { color: t.faint }]}>Technical note: {detail}</Text> : null}
-            </Card>
-          </FadeIn>
-        )}
-
-        {needCaption && (
-          <FadeIn>
-            <View style={{ gap: space.sm }}>
-              <Text style={[type.label, { color: t.sub }]}>Caption</Text>
-              <TextInput
-                value={caption}
-                onChangeText={setCaption}
-                placeholder="Copy the video's caption or description and paste it here."
-                placeholderTextColor={t.faint}
-                multiline
-                style={[inputStyle, { minHeight: 120, textAlignVertical: "top" }]}
-              />
-            </View>
-          </FadeIn>
-        )}
-
-        <Button
-          title={busy ? "Digesting…" : needCaption ? "Let me digest the caption" : "Let me digest this link"}
-          onPress={go}
-          loading={busy}
-          disabled={!url.trim() || (needCaption && !caption.trim())}
-        />
-        <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each link I digest = +1 XP (3 a day max).</Text>
+        <Button title="Let me digest this link" onPress={go} disabled={!url.trim()} />
+        <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each link I digest = +10 XP (3 a day max). 3 links = a level.</Text>
       </View>
+
+      {s.jobs.length > 0 && (
+        <View style={{ gap: space.sm }}>
+          <Text style={[type.label, { color: t.sub }]}>Digesting</Text>
+          {s.jobs.map((j) => <JobCard key={j.id} job={j} />)}
+        </View>
+      )}
 
       {s.recipes.length > 0 && (
         <View style={{ gap: space.sm }}>
@@ -158,5 +107,52 @@ export default function Add() {
         </View>
       )}
     </Screen>
+  );
+}
+
+function JobCard({ job }: { job: Job }) {
+  const t = useTheme();
+  const s = useStore();
+  const [caption, setCaption] = useState("");
+  const needCaption = job.status === "failed" && CAPTION_CODES.includes(job.code ?? "");
+
+  return (
+    <FadeIn>
+      <Card style={{ paddingVertical: space.md, borderWidth: job.status === "failed" ? 1 : 0, borderColor: t.danger + "55" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
+          {job.status === "digesting" ? <ActivityIndicator color={t.tint} /> : <Text style={{ fontSize: 18 }}>{job.status === "done" ? "✅" : "😵"}</Text>}
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} style={[type.body, { color: t.text, fontWeight: "600" }]}>
+              {job.status === "done" ? job.title : host(job.url)}
+            </Text>
+            <Text numberOfLines={2} style={[type.caption, { color: t.sub }]}>
+              {job.status === "digesting" ? "Digesting… videos can take a minute." : job.status === "done" ? "Digested! +10 XP" : job.error}
+            </Text>
+          </View>
+          {job.status !== "digesting" && (
+            <Pressable onPress={() => s.dismissJob(job.id)} hitSlop={10}>
+              <Text style={{ color: t.faint, fontSize: 18 }}>✕</Text>
+            </Pressable>
+          )}
+        </View>
+        {job.status === "done" && (
+          <Button title="Open recipe" kind="secondary" onPress={() => { const r = s.recipes.find((x) => x.title === job.title); if (r) s.openRecipe(r); s.dismissJob(job.id); router.push("/recipe"); }} />
+        )}
+        {job.status === "failed" && job.detail ? <Text style={[type.caption, { color: t.faint }]}>Technical note: {job.detail}</Text> : null}
+        {needCaption && (
+          <View style={{ gap: space.sm }}>
+            <TextInput
+              value={caption}
+              onChangeText={setCaption}
+              placeholder="Copy the post's caption and paste it here."
+              placeholderTextColor={t.faint}
+              multiline
+              style={{ backgroundColor: t.cardAlt, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 16, minHeight: 90, textAlignVertical: "top" }}
+            />
+            <Button title="Let me digest the caption" disabled={!caption.trim()} onPress={() => { s.dismissJob(job.id); s.digest(job.url, caption.trim()); }} />
+          </View>
+        )}
+      </Card>
+    </FadeIn>
   );
 }

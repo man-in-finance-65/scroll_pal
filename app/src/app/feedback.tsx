@@ -1,135 +1,114 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from "react-native";
+import { Keyboard, Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance, type ViewInstance } from "react-native";
 import Animated, { FadeInDown } from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Pal } from "../components/Pal";
 import { Button } from "../components/ui";
 import { api } from "../lib/api";
+import { ALL, moreStep, nextStep, SCRIPT } from "../lib/chat";
 import { fx } from "../lib/fx";
 import { useStore } from "../lib/store";
 import { radius, space, type, useTheme } from "../lib/theme";
+import type { ChatMsg, ChatSave, ChatStep } from "../lib/types";
 import { usePal } from "../lib/usePal";
 
 // Pal asks for advice like a mate would. No form, no "rate us": one question at a time,
-// tap an answer or say it in your own words. Each answer is saved on its own, so nothing is lost if you close it.
-type Step = { id: string; apiId?: string; ask: string; chips: string[]; text?: boolean; hint?: string };
-
-// After the scripted questions Pal keeps listening: every message is saved, until they say that's all.
-const ALL = "That's all";
-const moreStep = (k: number): Step => ({
-  id: `more${k}`,
-  apiId: "more",
-  ask: k === 0 ? "Thanks, pal. That really helps me get better. Anything else on your mind?" : "Noted! Anything else?",
-  chips: [ALL],
-  text: true,
-  hint: "Type another thought…",
-});
-
-const FLOWS: Record<number, Step[]> = {
-  // After the 1st cook: one quick question.
-  1: [
-    {
-      id: "would_share",
-      ask: "First cook done, pal! 🎉 Be honest: would you tell a friend who's stuck on dinner about me?",
-      chips: ["Yes, totally", "Maybe", "Not yet"],
-    },
-    {
-      id: "make_it_yes",
-      ask: "Thanks for being straight with me. What would make it a big yes?",
-      chips: ["Faster", "More recipes", "Prettier", "Fix something"],
-      text: true,
-      hint: "Or type your own idea…",
-    },
-  ],
-  // After the 3rd cook: a proper catch-up.
-  3: [
-    {
-      id: "favourite",
-      ask: "3 cooks in! 🔥 What's your favourite part of hanging out with me?",
-      chips: ["Videos → recipes", "Pal's reactions", "The plan", "Levelling up"],
-    },
-    {
-      id: "one_change",
-      ask: "If you were me, what's the ONE thing you'd change?",
-      chips: ["Make it faster", "More recipes", "Make it prettier", "Something's broken", "Nothing, keep going!"],
-      text: true,
-      hint: "Or type your own idea…",
-    },
-  ],
-  // Any time: from the Pal tab.
-  0: [
-    {
-      id: "open",
-      ask: "What's on your mind, pal? Good, bad or random, I'm all ears.",
-      chips: ["I love something", "Something confused me", "I found a bug", "I have an idea"],
-      text: true,
-      hint: "Type it here…",
-    },
-  ],
-};
-
-type Msg = { from: "pal" | "me"; text: string; key: string };
+// tap an answer or say it in your own words. Each answer is saved on its own, and the whole conversation is
+// kept on the phone, so closing the chat never loses anything.
 
 export default function Feedback() {
+  const s = useStore();
+  const { m } = useLocalSearchParams<{ m?: string }>();
+  const milestone = [1, 3].includes(Number(m)) ? Number(m) : 0;
+  if (!s.ready) return null; // wait for the saved chat to load before showing anything
+  return <Chat milestone={milestone} />;
+}
+
+function freshChat(milestone: number): ChatSave {
+  const first = SCRIPT[milestone][0];
+  return { log: [{ from: "pal", text: first.ask, key: "q0" }], step: first, finished: false, asked: [] };
+}
+
+// Lifts the bottom bar above the keyboard. Measures where this screen really ends on the display, so it is right in
+// a pop-up sheet with a header too (a plain KeyboardAvoidingView gets that wrong, which is how the keyboard
+// used to cover what you were typing).
+function useKeyboardLift(ref: React.RefObject<ViewInstance | null>) {
+  const [lift, setLift] = useState(0);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", (e) => {
+      ref.current?.measureInWindow((_x: number, y: number, _w: number, h: number) => setLift(Math.max(0, y + h - e.endCoordinates.screenY)));
+    });
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setLift(0));
+    return () => { show.remove(); hide.remove(); };
+  }, [ref]);
+  return lift;
+}
+
+function Chat({ milestone }: { milestone: number }) {
   const t = useTheme();
   const s = useStore();
   const pal = usePal();
-  const { m } = useLocalSearchParams<{ m?: string }>();
-  const milestone = [1, 3].includes(Number(m)) ? Number(m) : 0;
-  const steps = FLOWS[milestone];
+  const insets = useSafeAreaInsets();
+  const key = String(milestone);
 
-  const stepAt = (k: number): Step => (k < steps.length ? steps[k] : moreStep(k - steps.length));
-  const [i, setI] = useState(0);
-  const [finished, setFinished] = useState(false);
-  const [log, setLog] = useState<Msg[]>([{ from: "pal", text: steps[0].ask, key: "q0" }]);
+  // Come back to the same conversation. If it had ended, Pal welcomes you back and carries on.
+  const [chat, setChat] = useState<ChatSave>(() => {
+    const saved = s.chats[key];
+    if (!saved) return freshChat(milestone);
+    if (!saved.finished) return saved;
+    const step = moreStep(saved.asked.filter((x) => x.startsWith("more")).length);
+    return { ...saved, finished: false, step, log: [...saved.log, { from: "pal", text: "Welcome back, pal! Anything new on your mind?", key: "back" + saved.log.length }] };
+  });
+  const { log, step, finished } = chat;
   const [draft, setDraft] = useState("");
   const [typing, setTyping] = useState(false);
-  const [failed, setFailed] = useState<{ step: Step; answer: string } | null>(null);
-  const done = finished;
+  const [failed, setFailed] = useState<{ step: ChatStep; answer: string } | null>(null);
   const scroller = useRef<ScrollViewInstance>(null);
+  const frame = useRef<ViewInstance>(null);
+  const lift = useKeyboardLift(frame);
 
   useEffect(() => {
     if (milestone) s.markFeedbackAsked(milestone); // asked once; never nags
   }, []);
+  useEffect(() => { s.saveChat(key, chat); }, [chat]);
   useEffect(() => {
     const id = setTimeout(() => scroller.current?.scrollToEnd({ animated: true }), 120);
     return () => clearTimeout(id);
-  }, [log, typing, failed]);
+  }, [log, typing, failed, lift]);
 
-  async function answer(step: Step, a: string) {
+  async function answer(st: ChatStep, a: string) {
     const text = a.trim();
     if (!text) return;
     fx.tap();
-    if (text === ALL && step.apiId === "more") {
+    if (text === ALL && st.apiId === "more") {
       // Nothing to save, just a goodbye.
-      setLog((l) => [...l, { from: "me", text, key: "a" + step.id }, { from: "pal", text: "Anytime, pal. 💜", key: "bye" }]);
-      setFinished(true);
+      setChat((c) => ({ ...c, finished: true, asked: [...c.asked, st.id], log: [...c.log, { from: "me", text, key: "a" + st.id }, { from: "pal", text: "Anytime, pal. 💜", key: "bye" + c.log.length }] }));
       return;
     }
     setDraft("");
     setFailed(null);
-    setLog((l) => (l.some((x) => x.key === "a" + step.id) ? l : [...l, { from: "me", text, key: "a" + step.id }]));
+    setChat((c) => ({ ...c, log: c.log.some((x) => x.key === "a" + st.id) ? c.log : [...c.log, { from: "me", text, key: "a" + st.id }] }));
     setTyping(true);
     try {
-      await api.feedback({ device: s.deviceId, milestone, level: s.progress.level, cooks: s.progress.cooks, id: step.apiId ?? step.id, q: step.ask, a: text });
+      await api.feedback({ device: s.deviceId, milestone, level: s.progress.level, cooks: s.progress.cooks, id: st.apiId ?? st.id, q: st.ask, a: text });
     } catch {
       setTyping(false);
-      setFailed({ step, answer: text });
+      setFailed({ step: st, answer: text });
       return;
     }
-    const next = i + 1;
     setTimeout(() => {
       setTyping(false);
-      setI(next);
       fx.ready();
-      setLog((l) => [
-        ...l,
-        { from: "pal", text: stepAt(next).ask, key: "q" + next },
-      ]);
+      setChat((c) => {
+        const asked = [...c.asked, st.id];
+        const next = nextStep({ milestone, asked, lastAnswer: text, moreCount: asked.filter((x) => x.startsWith("more")).length });
+        const msg: ChatMsg = { from: "pal", text: next.ask, key: "q" + asked.length };
+        return { ...c, asked, step: next, log: [...c.log, msg] };
+      });
     }, 600);
   }
 
-  const step = stepAt(i);
   const bubble = (mine: boolean) => ({
     alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
     maxWidth: "85%" as const,
@@ -141,11 +120,13 @@ export default function Feedback() {
     paddingVertical: 12,
   });
 
+  const canType = !finished && !typing && !failed;
+
   return (
-    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: t.bg }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
-      <ScrollView ref={scroller} contentContainerStyle={{ padding: space.lg, gap: space.md }} keyboardShouldPersistTaps="handled">
+    <View ref={frame} collapsable={false} style={{ flex: 1, backgroundColor: t.bg }}>
+      <ScrollView ref={scroller} style={{ flex: 1 }} contentContainerStyle={{ padding: space.lg, gap: space.md }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
         <View style={{ alignItems: "center" }}>
-          <Pal state={typing ? "thinking" : done ? "excited" : "listening"} size={110} body={pal.body} level={pal.level} energy={pal.mood.energy} />
+          <Pal state={typing ? "thinking" : finished ? "excited" : "listening"} size={lift ? 70 : 110} body={pal.body} level={pal.level} energy={pal.mood.energy} />
         </View>
 
         {log.map((x) => (
@@ -167,47 +148,47 @@ export default function Feedback() {
           </View>
         )}
 
-        {!done && !typing && !failed && (
-          <Animated.View entering={FadeInDown.delay(200).springify()} style={{ gap: space.sm }}>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
-              {step.chips.map((c) => (
-                <Pressable
-                  key={c}
-                  onPress={() => answer(step, c)}
-                  style={{ borderWidth: 1.5, borderColor: t.tint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 10 }}
-                >
-                  <Text style={{ color: t.tint, fontWeight: "600", fontSize: 16 }}>{c}</Text>
-                </Pressable>
-              ))}
-            </View>
-            {step.text && (
-              <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end" }}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder={step.hint}
-                  placeholderTextColor={t.faint}
-                  multiline
-                  style={{ flex: 1, backgroundColor: t.card, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 17, maxHeight: 120, borderWidth: 1, borderColor: t.line }}
-                />
-                <Pressable
-                  onPress={() => answer(step, draft)}
-                  disabled={!draft.trim()}
-                  style={{ backgroundColor: t.tint, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: 14, opacity: draft.trim() ? 1 : 0.4 }}
-                >
-                  <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Send</Text>
-                </Pressable>
-              </View>
-            )}
+        {canType && (
+          <Animated.View entering={FadeInDown.delay(200).springify()} style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+            {step.chips.map((c) => (
+              <Pressable
+                key={c}
+                onPress={() => answer(step, c)}
+                style={{ borderWidth: 1.5, borderColor: t.tint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 10 }}
+              >
+                <Text style={{ color: t.tint, fontWeight: "600", fontSize: 16 }}>{c}</Text>
+              </Pressable>
+            ))}
           </Animated.View>
         )}
 
-        {done ? (
+        {finished ? (
           <Button title="Back to cooking" onPress={() => router.back()} />
         ) : (
-          !typing && <Button title={i > 0 ? "Close" : "Not now"} kind="ghost" onPress={() => router.back()} />
+          !typing && !lift && <Button title={log.length > 1 ? "Close" : "Not now"} kind="ghost" onPress={() => router.back()} />
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
+
+      {/* Pinned under the conversation, and lifted above the keyboard so you can always see what you're typing. */}
+      {canType && (
+        <View style={{ flexDirection: "row", gap: space.sm, alignItems: "flex-end", paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: (lift || insets.bottom) + space.sm, borderTopWidth: 1, borderColor: t.line, backgroundColor: t.bg }}>
+          <TextInput
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={step.hint ?? "Or type your own answer…"}
+            placeholderTextColor={t.faint}
+            multiline
+            style={{ flex: 1, backgroundColor: t.card, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 17, maxHeight: 120, borderWidth: 1, borderColor: t.line }}
+          />
+          <Pressable
+            onPress={() => answer(step, draft)}
+            disabled={!draft.trim()}
+            style={{ backgroundColor: t.tint, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: 14, opacity: draft.trim() ? 1 : 0.4 }}
+          >
+            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Send</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
   );
 }

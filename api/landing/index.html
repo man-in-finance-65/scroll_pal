@@ -4,26 +4,32 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Be Pal's pal</title>
-<meta name="description" content="Pal turns cooking videos into real meals and levels up when you cook. Want to be Pal's pal?">
+<meta name="description" content="I turn the posts that make your mouth water into your next meal. Thank me later, pal.">
 <meta name="theme-color" content="#141B2D">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="color-scheme" content="dark">
 <link rel="icon" href="favicon.png">
 <meta property="og:title" content="Do you want to be Pal's pal?">
-<meta property="og:description" content="Turn the cooking videos you scroll past into real meals. Cook, and Pal levels up.">
+<meta property="og:description" content="I turn the posts that make your mouth water into your next meal. Thank me later, pal.">
 <style>
   :root {
     --navy: #141B2D; --violet: #8B5CF6; --blue: #5B6CFF; --pink: #FF6FB5; --mint: #34D399; --orange: #FF8A5B;
     --text: #F5F5F7; --sub: #B9BDD3;
   }
   * { box-sizing: border-box; }
-  html, body { margin: 0; min-height: 100%; }
+  /* The whole screen is the background colour, edge to edge, including behind the notch, the home bar and when you pull past the ends. */
+  html { background: var(--navy); min-height: 100%; }
+  html, body { margin: 0; min-height: 100vh; min-height: 100dvh; }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1; background: radial-gradient(120% 80% at 50% 0%, #2b2a6b 0%, var(--navy) 55%, #0b0f1c 100%); }
   body {
+    background: transparent;
     font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     color: var(--text);
-    background: radial-gradient(120% 80% at 50% 0%, #2b2a6b 0%, var(--navy) 55%, #0b0f1c 100%) fixed;
     -webkit-font-smoothing: antialiased;
-    padding: env(safe-area-inset-top) 20px env(safe-area-inset-bottom);
+    padding: 0 20px;
   }
-  main { max-width: 440px; margin: 0 auto; min-height: 100svh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding: 28px 0; }
+  main { max-width: 440px; margin: 0 auto; min-height: 100vh; min-height: 100dvh; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; padding: calc(28px + env(safe-area-inset-top)) 0 calc(28px + env(safe-area-inset-bottom)); }
   .eyebrow { font-weight: 700; letter-spacing: .14em; text-transform: uppercase; font-size: 12px; color: var(--sub); }
   h1 { font-size: clamp(32px, 9vw, 44px); line-height: 1.05; margin: 0; letter-spacing: -.02em; font-weight: 800; }
   p { margin: 0; color: var(--sub); font-size: 17px; line-height: 1.45; }
@@ -123,7 +129,7 @@
   <!-- Step 1: the question -->
   <section id="ask">
     <h1>Do you want to be Pal's pal?</h1>
-    <p style="margin-top:12px">I turn the cooking videos you scroll past into real recipes and real meals. Cook something and I level up. Be one of my first pals.</p>
+    <p style="margin-top:12px">I turn the posts that make your mouth water into your next meal. Thank me later, pal.</p>
     <div class="btns">
       <button class="yes" id="yes">Yes, I'm in! 🍳</button>
       <button class="no" id="no">Not yet</button>

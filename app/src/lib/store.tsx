@@ -2,7 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { api } from "./api";
 import { num } from "./format";
-import type { ChecklistItem, CookLog, Goal, Plan, PlanFromApi, Recipe, Stamp } from "./types";
+import { ApiError } from "./api";
+import { fx } from "./fx";
+import type { ChatSave, ChecklistItem, CookLog, Goal, Job, Plan, PlanFromApi, Recipe, Stamp } from "./types";
 import { computeProgress, localDay, xpMath, type Progress, type XpEvent } from "./xp";
 
 // Everything lives on the phone (AsyncStorage). No accounts, no database.
@@ -18,6 +20,7 @@ type State = {
   checklist: ChecklistItem[];
   feedbackAsked: number; // highest cook milestone Pal has already chatted about (1 or 3)
   feedbackPending: number; // milestone to chat about once any celebration closes (0 = none)
+  chats: Record<string, ChatSave>; // saved conversations, by chat kind ("0", "1", "3")
 };
 
 const KEY = "scrollpal:v1";
@@ -33,6 +36,7 @@ const initial = (): State => ({
   checklist: [],
   feedbackAsked: 0,
   feedbackPending: 0,
+  chats: {},
 });
 
 export type Celebration = { kind: "level"; level: number; math: string } | { kind: "stamp"; stamp: Stamp };
@@ -43,7 +47,12 @@ type Ctx = State & {
   progress: Progress;
   celebration: Celebration | null;
   clearCelebration: () => void;
-  addShare: (recipe: Recipe) => void;
+  jobs: Job[];
+  digest: (url: string, caption?: string) => void; // starts digesting; many can run at once
+  dismissJob: (id: string) => void;
+  saveChat: (key: string, chat: ChatSave) => void;
+  clearChat: (key: string) => void;
+  addShare: (recipe: Recipe) => boolean; // true when this link levelled Pal up
   openRecipe: (recipe: Recipe) => void;
   setGoal: (g: Goal) => void;
   savePlan: (p: PlanFromApi, recipe: Recipe, goal: Goal, days: number) => void;
@@ -101,7 +110,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const progress = useMemo(() => computeProgress(state.events), [state.events]);
   const update = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
 
-  const addShare = useCallback((recipe: Recipe) => {
+  const addShare = useCallback((recipe: Recipe): boolean => {
+    const before = computeProgress(stateRef.current.events);
+    const events: XpEvent[] = [...stateRef.current.events, { type: "share", at: new Date().toISOString() }];
+    const after = computeProgress(events);
+    if (after.level > before.level) setCelebration({ kind: "level", level: after.level, math: xpMath(after) });
     update((s) => ({
       ...s,
       recipe,
@@ -109,7 +122,29 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       events: [...s.events, { type: "share", at: new Date().toISOString() }],
     }));
     api.event("share", stateRef.current.deviceId, recipe.title);
+    return after.level > before.level;
   }, [update]);
+
+  // Pal can chew on several links at once: each one is a job with its own status.
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const digest = useCallback((url: string, caption?: string) => {
+    const id = Math.random().toString(36).slice(2, 9);
+    setJobs((j) => [{ id, url, caption, status: "digesting" }, ...j]);
+    api.ingest(url, caption).then(
+      (recipe) => {
+        if (addShare(recipe)) fx.levelUp();
+        else fx.ready();
+        setJobs((j) => j.map((x) => (x.id === id ? { ...x, status: "done", title: recipe.title } : x)));
+      },
+      (e: ApiError) => {
+        fx.error();
+        setJobs((j) => j.map((x) => (x.id === id ? { ...x, status: "failed", error: e.message, detail: e.detail, code: e.code } : x)));
+      },
+    );
+  }, [addShare]);
+  const dismissJob = useCallback((id: string) => setJobs((j) => j.filter((x) => x.id !== id)), []);
+  const saveChat = useCallback((key: string, chat: ChatSave) => update((s) => ({ ...s, chats: { ...s.chats, [key]: chat } })), [update]);
+  const clearChat = useCallback((key: string) => update((s) => { const { [key]: _, ...rest } = s.chats; return { ...s, chats: rest }; }), [update]);
 
   const openRecipe = useCallback((recipe: Recipe) => update((s) => ({ ...s, recipe })), [update]);
   const setGoal = useCallback((goal: Goal) => update((s) => ({ ...s, goal })), [update]);
@@ -204,7 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const clearCelebration = useCallback(() => setCelebration(null), []);
 
   const value: Ctx = {
-    ...state, ready, progress, celebration, clearCelebration, addShare, openRecipe, setGoal, savePlan,
+    ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, addShare, openRecipe, setGoal, savePlan,
     confirmPlan, completeSlot, skipSlot, toggleItem, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

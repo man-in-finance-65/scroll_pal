@@ -1,14 +1,13 @@
 // XP and level rules. Pure functions, no React, so they are easy to test (see xp.test.ts).
 //
 // Plain English:
-// - Sharing a recipe link gives 1 XP, but only the first 3 shares each day count.
+// - Digesting a link gives 10 XP, but only the first 3 links each day count.
 // - Completing a cook gives 10 XP.
-// - Every 30 XP is one level. Lv.2 needs 30 XP AND at least 1 completed cook.
-// - Levels only go up at the moment you complete a cook. Shares fill the bar,
-//   but a share can never push Pal over a level on its own.
+// - Every 30 XP is one level, so 3 links (or 3 cooks, or a mix) = one level. Same pace at every level.
 // - Skipping a planned cook never takes XP or a level away.
+// (Owner's call, 2026-10-23: links level Pal up too, 3 per level, for now. Before this only cooks could.)
 
-export const SHARE_XP = 1;
+export const SHARE_XP = 10;
 export const SHARE_CAP_PER_DAY = 3;
 export const COOK_XP = 10;
 export const XP_PER_LEVEL = 30;
@@ -25,7 +24,6 @@ export type Progress = {
   shareXp: number;
   xpIntoLevel: number; // XP earned since the start of the current level
   xpForNext: number; // XP needed to reach the next level, measured from the start of the current level
-  readyToLevel: boolean; // XP is there; the next completed cook levels Pal up
 };
 
 // Calendar day in the phone's own time zone, e.g. "2026-10-23".
@@ -60,9 +58,9 @@ export function computeProgress(events: XpEvent[]): Progress {
     } else if (e.type === "cook") {
       cooks++;
       xp += COOK_XP;
-      level = Math.max(level, levelForXp(xp)); // the only place a level can go up
     }
     // "skip": no XP change, level kept.
+    level = Math.max(level, levelForXp(xp)); // a level never goes down
   }
 
   const levelStart = (level - 1) * XP_PER_LEVEL;
@@ -76,21 +74,19 @@ export function computeProgress(events: XpEvent[]): Progress {
     shareXp: sharesCounted * SHARE_XP,
     xpIntoLevel: xp - levelStart,
     xpForNext: XP_PER_LEVEL,
-    readyToLevel: levelForXp(xp) > level,
   };
 }
 
 // The maths shown under the XP bar, e.g. "3 cooks × 10 = 30 · 2 shares × 1 = 2 · total 32 XP".
 export function xpMath(p: Progress): string {
   const cook = `${p.cooks} ${p.cooks === 1 ? "cook" : "cooks"} × ${COOK_XP} = ${p.cookXp}`;
-  const share = `${p.sharesCounted} ${p.sharesCounted === 1 ? "share" : "shares"} × ${SHARE_XP} = ${p.shareXp}`;
+  const share = `${p.sharesCounted} ${p.sharesCounted === 1 ? "link" : "links"} × ${SHARE_XP} = ${p.shareXp}`;
   return `${cook} · ${share} · total ${p.xp} XP`;
 }
 
 // What's between the user and the next level, in words.
 export function nextLevelHint(p: Progress): string {
-  if (p.readyToLevel) return `XP is there. Complete your next cook to reach Lv.${p.level + 1}.`;
   const missing = p.xpForNext - p.xpIntoLevel;
-  const cooksNeeded = Math.ceil(missing / COOK_XP);
-  return `${missing} XP to Lv.${p.level + 1} · about ${cooksNeeded} ${cooksNeeded === 1 ? "cook" : "cooks"}`;
+  const more = Math.ceil(missing / SHARE_XP);
+  return `${missing} XP to Lv.${p.level + 1} · ${more} more ${more === 1 ? "link or cook" : "links or cooks"}`;
 }

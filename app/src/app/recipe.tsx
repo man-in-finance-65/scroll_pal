@@ -1,7 +1,8 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Pressable, Text, View } from "react-native";
+import { Image, Linking, Platform, Pressable, Text, View } from "react-native";
 import { Pal } from "../components/Pal";
+import { Verdict } from "../components/Verdict";
 import { Button, Card, NumberCard, Screen, Segmented } from "../components/ui";
 import { fx } from "../lib/fx";
 import { api, ApiError } from "../lib/api";
@@ -61,8 +62,17 @@ export default function RecipeScreen() {
         <Text style={[type.body, { color: t.sub }]}>
           {r.creator} · {r.cuisine} · serves {r.servings}
         </Text>
-        <Text style={[type.caption, { color: t.faint }]}>I'm {Math.floor(r.confidence * 100)}% sure this is the recipe.</Text>
       </View>
+
+      {r.image ? (
+        <Image source={{ uri: r.image }} accessibilityLabel={r.title} resizeMode="cover" style={{ width: "100%", aspectRatio: 16 / 10, borderRadius: radius.lg, backgroundColor: t.cardAlt }} />
+      ) : null}
+
+      <Card>
+        <Text style={[type.label, { color: brand.mint }]}>How it fits your goal</Text>
+        <Verdict recipe={r} goal={s.goal} />
+        <Segmented options={GOALS} value={s.goal} onChange={s.setGoal} />
+      </Card>
 
       <View style={{ gap: space.md }}>
         <View style={{ flexDirection: "row", gap: space.md }}>
@@ -97,6 +107,8 @@ export default function RecipeScreen() {
           </View>
         ))}
       </Card>
+
+      <Button title="Find these ingredients near me" kind="secondary" onPress={() => { Linking.openURL(storesUrl()).catch(() => {}); }} />
 
       <Card>
         <Text style={[type.h2, { color: t.text }]}>Steps</Text>
@@ -133,6 +145,10 @@ export default function RecipeScreen() {
     </Screen>
   );
 }
+
+// Opens the phone's own maps app on "grocery stores" around wherever you are.
+export const storesUrl = () =>
+  Platform.OS === "ios" ? "http://maps.apple.com/?q=grocery+store" : "geo:0,0?q=grocery+store";
 
 function Step({ label, onPress }: { label: string; onPress: () => void }) {
   const t = useTheme();

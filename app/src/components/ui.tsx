@@ -179,3 +179,21 @@ export function FadeIn({ children, delay = 0 }: { children: ReactNode; delay?: n
 const styles = StyleSheet.create({
   btn: { paddingVertical: 16, paddingHorizontal: 20, alignItems: "center", justifyContent: "center", borderRadius: radius.md },
 });
+
+// Pal talking: a bubble with a little tail pointing down at Pal. Pops in so it feels like Pal piping up.
+export function SpeechBubble({ children }: { children: ReactNode }) {
+  const t = useTheme();
+  const pop = useSharedValue(0);
+  useEffect(() => {
+    pop.value = withSpring(1, { damping: 9, stiffness: 180 });
+  }, []);
+  const anim = useAnimatedStyle(() => ({ opacity: pop.value, transform: [{ scale: 0.8 + 0.2 * pop.value }, { translateY: (1 - pop.value) * 8 }] }));
+  return (
+    <Animated.View style={[{ alignItems: "center" }, anim]}>
+      <View style={{ backgroundColor: t.card, borderRadius: radius.lg, paddingHorizontal: space.md, paddingVertical: 12, borderWidth: 1, borderColor: t.line, maxWidth: 300 }}>
+        <Text style={[type.body, { color: t.text, textAlign: "center", fontWeight: "600" }]}>{children}</Text>
+      </View>
+      <View style={{ width: 16, height: 16, backgroundColor: t.card, borderRightWidth: 1, borderBottomWidth: 1, borderColor: t.line, transform: [{ rotate: "45deg" }], marginTop: -9 }} />
+    </Animated.View>
+  );
+}

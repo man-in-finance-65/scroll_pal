@@ -1,8 +1,8 @@
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { z } from "zod";
-import { Recipe } from "./schema.js";
+import { Plan, Recipe } from "./schema.js";
 
-const PROMPT = `You are reading a cooking video (or its caption) and writing the recipe down.
+const PROMPT = `You are reading a cooking video, social post, or recipe page (or its caption) and writing the recipe down.
 Return ONLY the JSON object described by the schema.
 Keep it SHORT: at most 8 steps, each under 20 words. Plain ingredient names.
 Rules:
@@ -80,4 +80,26 @@ export async function readRecipe(
     recipe: Recipe.parse(JSON.parse(text)),
     info: { model: opts.model, ms: Date.now() - t0, promptTokens: u?.promptTokenCount, outputTokens: u?.candidatesTokenCount, thoughtTokens: u?.thoughtsTokenCount, thinking },
   };
+}
+
+// Meal plan from Gemini: the second choice when Claude isn't set up or is down, before the plain built-in planner.
+const planSchema = (() => {
+  const { $schema, ...rest } = z.toJSONSchema(Plan) as Record<string, unknown>;
+  return rest;
+})();
+
+export async function planWithGemini(prompt: string): Promise<Plan> {
+  const res = await ai().models.generateContent({
+    model: process.env.GEMINI_MODEL || "gemini-flash-latest",
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+    config: {
+      responseMimeType: "application/json",
+      responseJsonSchema: planSchema,
+      temperature: 0.8,
+      abortSignal: AbortSignal.timeout(45_000),
+      thinkingConfig: { thinkingLevel: ThinkingLevel.MINIMAL },
+    },
+  });
+  if (!res.text) throw new Error("Gemini returned no plan");
+  return Plan.parse(JSON.parse(res.text));
 }

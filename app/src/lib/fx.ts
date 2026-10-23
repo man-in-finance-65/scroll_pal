@@ -6,19 +6,36 @@ import { Platform } from "react-native";
 
 // Sound + vibration, always together, and always mirroring each other.
 //
+// Every sound file has "hits" (the clicks you hear). I measured where each one lands (SOUND_HITS_MS below) and fire
+// one vibration on every hit, with a matching strength, so what you hear is what you feel. Louder/bigger sounds get
+// firmer vibrations. If you replace a sound file, re-measure its hits and update the table.
+//
 // THE TAP STREAK ("Mario jump"): tap once and Pal gives a light knock. Tap again quickly and it's a firmer double.
 // Tap a third time (and after) and it's a heavy triple with a rising sound. Stop for a moment and it resets.
-// The vibration hits and the sound hits happen at the same moments (HIT_OFFSETS_MS), and the sound files in
-// assets/sounds were built with those exact offsets. If you change the offsets, regenerate the sounds.
+//
+// Phones take a moment to start a sound, while a vibration is instant. AUDIO_LATENCY_MS holds each vibration back
+// by that moment so the two land together. If they still feel apart on your phone, nudge this number.
 
 type Tier = 1 | 2 | 3;
+type Hit = [atMs: number, strength: Haptics.ImpactFeedbackStyle];
+const L = Haptics.ImpactFeedbackStyle.Light;
+const M = Haptics.ImpactFeedbackStyle.Medium;
+const H = Haptics.ImpactFeedbackStyle.Heavy;
+const AUDIO_LATENCY_MS = 70;
 const STREAK_WINDOW_MS = 1200; // pause longer than this and the streak starts over
-const HIT_OFFSETS_MS: Record<Tier, number[]> = { 1: [0], 2: [0, 110], 3: [0, 90, 180] };
-const HIT_STYLE: Record<Tier, Haptics.ImpactFeedbackStyle[]> = {
-  1: [Haptics.ImpactFeedbackStyle.Light],
-  2: [Haptics.ImpactFeedbackStyle.Medium, Haptics.ImpactFeedbackStyle.Medium],
-  3: [Haptics.ImpactFeedbackStyle.Heavy, Haptics.ImpactFeedbackStyle.Heavy, Haptics.ImpactFeedbackStyle.Heavy],
-};
+
+const SOUND_HITS_MS = {
+  hop1: [[0, L]],
+  hop2: [[0, M], [110, M]],
+  hop3: [[0, H], [90, H], [180, H]],
+  nice1: [[0, L], [110, M]], // Done: click + sparkle, bigger each tier
+  nice2: [[0, M], [110, M]],
+  nice3: [[0, H], [90, H], [180, H]],
+  levelup: [[0, M], [100, H], [645, M], [720, H]],
+  stamp: [[0, M], [105, H]],
+  whoosh: [[300, L]],
+  soft: [[0, M], [160, L], [295, L]],
+} satisfies Record<string, Hit[]>;
 
 const SOUNDS = {
   hop1: require("../../assets/sounds/hop1.mp3"), // tap streak: knock
@@ -41,7 +58,6 @@ const players: Partial<Record<SoundName, AudioPlayer>> = {};
 let started = false;
 
 const native = Platform.OS !== "web";
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 const emit = () => listeners.forEach((l) => l());
 
 export async function initFx() {
@@ -99,19 +115,21 @@ function playSound(name: SoundName) {
   }
 }
 
-// Every hit of a vibration pattern, on its own timer, so it lines up with the sound.
-function vibrateHits(tier: Tier) {
+// One vibration per hit of the sound, each on its own timer.
+function feel(name: SoundName, extraAfterMs?: { type: Haptics.NotificationFeedbackType; afterLastHitMs: number }) {
   if (!native || !prefs.vibration) return;
-  HIT_OFFSETS_MS[tier].forEach((at, i) => {
-    const hit = () => Haptics.impactAsync(HIT_STYLE[tier][i]).catch(() => {});
-    if (at === 0) hit();
-    else setTimeout(hit, at);
-  });
+  const hits: Hit[] = SOUND_HITS_MS[name];
+  hits.forEach(([at, strength]) => setTimeout(() => Haptics.impactAsync(strength).catch(() => {}), at + AUDIO_LATENCY_MS));
+  if (extraAfterMs) {
+    const last = hits[hits.length - 1][0];
+    setTimeout(() => Haptics.notificationAsync(extraAfterMs.type).catch(() => {}), last + AUDIO_LATENCY_MS + extraAfterMs.afterLastHitMs);
+  }
 }
-const notify = (type: Haptics.NotificationFeedbackType, afterMs = 0) => {
-  if (!native || !prefs.vibration) return;
-  setTimeout(() => Haptics.notificationAsync(type).catch(() => {}), afterMs);
+const both = (name: SoundName, extra?: { type: Haptics.NotificationFeedbackType; afterLastHitMs: number }) => {
+  playSound(name);
+  feel(name, extra);
 };
+const OK = Haptics.NotificationFeedbackType.Success;
 
 // ---- the streak ----
 let streak = 0;
@@ -127,51 +145,19 @@ export const fx = {
   // Any tap: button, tab chip, checklist tick, poking Pal.
   tap: () => {
     const tier = nextTier();
-    vibrateHits(tier);
-    playSound(`hop${tier}` as SoundName);
-    if (tier === 3) notify(Haptics.NotificationFeedbackType.Success, 260);
+    both(`hop${tier}` as SoundName, tier === 3 ? { type: OK, afterLastHitMs: 80 } : undefined);
   },
   // Done on a cook: the same streak, with Pal's signature sound.
   done: () => {
     const tier = nextTier();
-    vibrateHits(tier);
-    playSound(`nice${tier}` as SoundName);
-    notify(Haptics.NotificationFeedbackType.Success, HIT_OFFSETS_MS[tier].at(-1)! + 90);
+    both(`nice${tier}` as SoundName, { type: OK, afterLastHitMs: 90 });
   },
-  // Level up: rising taps, then the success buzz, under the fanfare.
-  levelUp: () => {
-    if (native && prefs.vibration) {
-      (async () => {
-        for (const s of [Haptics.ImpactFeedbackStyle.Light, Haptics.ImpactFeedbackStyle.Medium, Haptics.ImpactFeedbackStyle.Heavy]) {
-          await Haptics.impactAsync(s).catch(() => {});
-          await wait(85);
-        }
-        notify(Haptics.NotificationFeedbackType.Success);
-      })();
-    }
-    playSound("levelup");
-  },
-  stamp: () => {
-    if (native && prefs.vibration) Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
-    playSound("stamp");
-  },
+  levelUp: () => both("levelup", { type: OK, afterLastHitMs: 90 }),
+  stamp: () => both("stamp"),
   // Pal finished digesting a link or building a plan.
-  ready: () => {
-    notify(Haptics.NotificationFeedbackType.Success);
-    playSound("whoosh");
-  },
-  skip: () => {
-    notify(Haptics.NotificationFeedbackType.Warning);
-    playSound("soft");
-  },
-  error: () => {
-    notify(Haptics.NotificationFeedbackType.Warning);
-    playSound("soft");
-  },
+  ready: () => both("whoosh", { type: OK, afterLastHitMs: 60 }),
+  skip: () => both("soft"),
+  error: () => both("soft"),
   // The "Test" button in settings: plays the biggest tap so you can tell sound and vibration both work.
-  test: () => {
-    vibrateHits(3);
-    playSound("hop3");
-    notify(Haptics.NotificationFeedbackType.Success, 260);
-  },
+  test: () => both("hop3", { type: OK, afterLastHitMs: 80 }),
 };

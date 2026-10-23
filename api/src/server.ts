@@ -1,7 +1,8 @@
 import express, { type Request, type Response } from "express";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildPlan } from "./claude.js";
+import { buildPlan, planPrompt } from "./claude.js";
+import { planWithGemini } from "./gemini.js";
 import { IngestError, ingest } from "./ingest.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
@@ -50,21 +51,22 @@ app.post("/v1/plan", async (req: Request, res: Response) => {
   if (process.env.MOCK_AI === "1") {
     plan = mockPlan(goal, days);
     planner = "mock";
-  } else if (!process.env.ANTHROPIC_API_KEY) {
-    plan = simplePlan(recipe, goal, days);
-    planner = "built-in";
-    note = "ANTHROPIC_API_KEY is not set";
   } else {
-    try {
-      plan = await buildPlan(recipe, goal, days);
-    } catch (e) {
+    // 1) Claude, 2) Gemini, 3) the built-in planner. Whoever answers first wins, so Pal can always dream up a plan.
+    const tried: string[] = [];
+    const clean = (e: unknown) => {
       let text = String((e as Error)?.message ?? e);
       try { text = JSON.parse(text)?.error?.message ?? text; } catch {}
-      note = text.replace(/sk-[A-Za-z0-9_-]{10,}/g, "***").replace(/\s+/g, " ").slice(0, 220);
-      console.warn(`plan: Claude failed, using the built-in planner: ${note}`);
-      plan = simplePlan(recipe, goal, days);
-      planner = "built-in";
+      return text.replace(/sk-[A-Za-z0-9_-]{10,}|AIza[0-9A-Za-z_-]{20,}/g, "***").replace(/\s+/g, " ").slice(0, 160);
+    };
+    if (process.env.ANTHROPIC_API_KEY) {
+      try { plan = await buildPlan(recipe, goal, days); } catch (e) { tried.push(`claude: ${clean(e)}`); }
+    } else tried.push("ANTHROPIC_API_KEY is not set");
+    if (!plan && process.env.GEMINI_API_KEY) {
+      try { plan = await planWithGemini(planPrompt(recipe, goal, days)); planner = "gemini"; } catch (e) { tried.push(`gemini: ${clean(e)}`); }
     }
+    if (!plan) { plan = simplePlan(recipe, goal, days); planner = "built-in"; }
+    if (tried.length) { note = tried.join(" | "); console.warn(`plan: ${planner} used. ${note}`); }
   }
   res.json({ ...plan, planner, note });
 });

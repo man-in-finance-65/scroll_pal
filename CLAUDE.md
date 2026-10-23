@@ -5,14 +5,14 @@ Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns 
 - Expo SDK 58, expo-router, TypeScript. Must run in Expo Go.
   (Changed from SDK 57 with the owner's OK on 2026-10-23: the Expo Go in the app stores only opens SDK 58.)
 - API: Node/TS (Express), deployed on Google Cloud Run. The phone only talks to this API. API keys never go in the app.
-- Gemini reads the video. Claude (small model) builds the plan.
+- Gemini reads the video (YouTube) or the page text/caption (Instagram, TikTok, recipe sites; the API fetches it, best effort, else asks for the caption). Claude (small model) builds the plan.
 - Local state: AsyncStorage on the phone (XP, level, passport, plan). No database yet.
 - Sound: expo-audio (added with the owner's OK, 2026-10-23). Sounds are original and synthesized in-house; do not copy anyone's recordings or voice.
 - Landing page + hidden Google Sheet (Apps Script) for the "be Pal's pal" count and feedback, added with the owner's OK, 2026-10-23.
 - Animation: react-native-reanimated springs. Rings: react-native-svg. Haptics: expo-haptics.
 
 ## Rules
-- Pal levels up on COMPLETED cooks. Shares give small XP but can never cross a level on their own.
+- Levels: 30 XP each. A digested link and a completed cook are worth 10 XP each, so 3 links = 1 level at every level (owner's change, 2026-10-23, "for now"; links max 3 a day). Before this only cooks could level Pal up.
 - Every ingredient and macro has source: "stated" | "estimated". Estimated ones show a "~" in the UI.
 - Show the math for any number the user sees. Never round up.
 - Secrets only in env vars listed in .env.example. Never commit them.

@@ -14,6 +14,8 @@ export type Recipe = {
   cook_minutes: number;
   macros_per_serving: Macros;
   confidence: number;
+  image?: string | null; // photo for the dish: the video thumbnail or the page's picture
+  source_url?: string;
 };
 
 export type Goal = "bulk" | "cut" | "maintain";
@@ -50,3 +52,11 @@ export type Plan = {
 export type Stamp = { key: string; label: string; kind: "cuisine" | "creator"; at: string };
 export type CookLog = { at: string; title: string; cuisine: string; creator: string };
 export type ChecklistItem = { name: string; amount: string; math: string | null; estimated: boolean; checked: boolean };
+
+// A saved chat with Pal, so closing it never loses the conversation.
+export type ChatMsg = { from: "pal" | "me"; text: string; key: string };
+export type ChatStep = { id: string; apiId?: string; ask: string; chips: string[]; hint?: string };
+export type ChatSave = { log: ChatMsg[]; step: ChatStep; finished: boolean; asked: string[] };
+
+// One link Pal is digesting right now. Lives in memory only.
+export type Job = { id: string; url: string; caption?: string; status: "digesting" | "done" | "failed"; error?: string; detail?: string; code?: string; title?: string };
