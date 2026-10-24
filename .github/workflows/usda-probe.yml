@@ -9,7 +9,8 @@ jobs:
     steps:
       - run: |
           B="https://api.nal.usda.gov/fdc/v1"
-          for q in "query=salt&dataType=Foundation,SR%20Legacy&pageSize=10" "query=salt&dataType=Foundation,SR%20Legacy&pageSize=5" "query=salt&dataType=SR%20Legacy&pageSize=10" "query=salt&pageSize=10" "query=chicken%20breast&dataType=Foundation&dataType=SR%20Legacy&pageSize=10"; do
+          for q in "query=chicken+breast&dataType=Foundation%2CSR+Legacy&pageSize=10" "query=salt&dataType=Foundation%2CSR+Legacy&pageSize=10" "query=salt&dataType=Foundation%2CSR%20Legacy&pageSize=10"; do
             echo "== $q -> $(curl -s -o /tmp/o -w '%{http_code}' "$B/foods/search?api_key=DEMO_KEY&$q") $(head -c 160 /tmp/o)"
           done
+          echo "== bad key -> $(curl -s -o /tmp/o -w '%{http_code}' "$B/foods/search?api_key=NOTAREALKEY123&query=salt") $(head -c 200 /tmp/o)"
           echo "== POST -> $(curl -s -o /tmp/o -w '%{http_code}' -X POST "$B/foods/search?api_key=DEMO_KEY" -H 'content-type: application/json' -d '{"query":"chicken breast","dataType":["Foundation","SR Legacy"],"pageSize":10}') $(head -c 300 /tmp/o)"

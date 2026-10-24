@@ -60,11 +60,13 @@ export function createUsda(apiKey: string | undefined, pick: FoodPicker, fetchIm
   const limited = concurrency(4);
   // USDA answers 503/429 to bursts, so at most 4 requests run at once and a busy answer is retried with backoff.
   const get = async (path: string, params: Record<string, string>) => {
-    const qs = new URLSearchParams({ ...params, api_key: apiKey! });
+    const qs = new URLSearchParams({ ...params, api_key: apiKey! }).toString().replace(/\+/g, "%20");
     for (let attempt = 0; ; attempt++) {
       const res = await limited(() => fetchImpl(`${BASE}${path}?${qs}`));
       if (res.ok) return res.json();
-      if (attempt >= 3 || (res.status !== 429 && res.status < 500)) throw new Error(`USDA ${path} returned ${res.status}`);
+      if (attempt >= 3 || (res.status !== 429 && res.status < 500)) {
+        throw new Error(`USDA ${path} returned ${res.status}: ${(await res.text()).slice(0, 200).replace(apiKey!, "[key]")}`);
+      }
       await new Promise((r) => setTimeout(r, retryDelayMs * 2 ** attempt));
     }
   };

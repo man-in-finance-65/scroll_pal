@@ -27,10 +27,57 @@ export type Swap = {
   unmatched: string[];
 };
 
+export type BreakdownLine =
+  | { name: string; usda: string; grams: number; macros: Macros }
+  | { name: string; usda: null; grams: null; macros: null; reason: string };
+
 export type GoalFit = {
   optimized_recipe: Recipe;
   swaps: Swap[];
   deltas: Macros;
   original_macros: Macros;
   unmatched: string[];
+  /** Whole-recipe numbers per original ingredient (divide by portions for one portion). */
+  breakdown: BreakdownLine[];
+  unmatched_detail: { name: string; reason: string }[];
+};
+
+/** A recipe as saved on the phone. `note` is set when the server could only read the caption. */
+export type SavedRecipe = { id: string; recipe: Recipe; note: string | null; savedAt: number };
+
+/** What actually goes on the plan / gets cooked: the original or the goal-optimized version with chosen swaps. */
+export type Dish = {
+  recipeId: string;
+  version: "original" | "optimized";
+  goal: Goal | null;
+  title: string;
+  creator: Recipe["creator"];
+  ingredients: Ingredient[];
+  instructions: Recipe["instructions"];
+  /** Per portion. */
+  macros: Macros;
+  totalMin: number;
+  swapsOn: string[];
+};
+
+export type Slot = "breakfast" | "lunch" | "dinner";
+export const SLOTS: Slot[] = ["breakfast", "lunch", "dinner"];
+
+export type Cook = {
+  at: number;
+  dish: Dish;
+  xp: { base: number; protein: number; noWaste: number };
+};
+
+export type Targets = { calories: number; protein_g: number };
+
+export type CartItem = { name: string; quantity: number | null; unit: string; from: string[]; isStaple: boolean };
+export type Store = "instacart" | "costco" | "doordash";
+export type CartResult = {
+  store: Store;
+  mode: "list_link" | "search_links";
+  list_url: string | null;
+  items: { name: string; search_url: string }[];
+  prices: null;
+  note: string;
 };
