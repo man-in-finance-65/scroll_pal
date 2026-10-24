@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Pal",
+    "slug": "pal-milestone-1",
+    "scheme": "pal",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      "expo-router",
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
