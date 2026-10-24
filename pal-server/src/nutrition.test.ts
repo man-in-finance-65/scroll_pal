@@ -52,3 +52,12 @@ test("trunc1 never rounds up", () => {
   assert.equal(trunc1(-1.99), -1.9);
   assert.equal(trunc1(0.3), 0.3);
 });
+
+test("count with no unit uses the name's last word as the USDA portion (4 garlic cloves)", () => {
+  const GARLIC = food({ calories: 149, protein_g: 6.4, carbs_g: 33, fat_g: 0.5 }, [
+    { label: "cup", amount: 1, gramWeight: 136 },
+    { label: "clove", amount: 1, gramWeight: 3 },
+  ]);
+  const r = gramsFor({ name: "garlic cloves", quantity: 4, unit: "" }, GARLIC);
+  assert.ok("grams" in r && r.grams === 12);
+});

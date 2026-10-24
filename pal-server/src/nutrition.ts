@@ -71,7 +71,9 @@ function labelVolumeMl(label: string): number | null {
 const isMassLabel = (label: string) => /\b(g|gram|grams|oz|ounce|lb)\b/i.test(label) && labelVolumeMl(label) === null;
 
 /** Grams for an ingredient line using USDA's own portion data. null = cannot convert honestly. */
-export function gramsFor(ing: Pick<Ingredient, "quantity" | "unit">, food: UsdaFood): { grams: number } | { reason: string } {
+const singularWord = (w: string) => w.replace(/[^a-z]/g, "").replace(/s$/, "");
+
+export function gramsFor(ing: Pick<Ingredient, "quantity" | "unit"> & { name?: string }, food: UsdaFood): { grams: number } | { reason: string } {
   const unit = ing.unit.trim().toLowerCase();
   if (unit in MASS_G) return { grams: ing.quantity * MASS_G[unit] };
 
@@ -86,7 +88,11 @@ export function gramsFor(ing: Pick<Ingredient, "quantity" | "unit">, food: UsdaF
 
   const counts = food.portions.filter((p) => labelVolumeMl(p.label) === null && !isMassLabel(p.label) && p.amount > 0);
   const singular = unit.replace(/s$/, "");
-  const named = counts.find((p) => singular && p.label.toLowerCase().includes(singular));
+  // "4 garlic cloves" (no unit): the name's last word can be the unit USDA uses ("clove").
+  const nameUnit = singularWord((ing.name ?? "").trim().toLowerCase().split(/\s+/).pop() ?? "");
+  const named =
+    counts.find((p) => singular && p.label.toLowerCase().includes(singular)) ??
+    (GENERIC_COUNT.has(unit) ? counts.find((p) => nameUnit && new RegExp(`\\b${nameUnit}\\b`).test(p.label.toLowerCase())) : undefined);
   const pick = named ?? (GENERIC_COUNT.has(unit) ? counts[0] : undefined);
   if (!pick) return { reason: `no USDA portion for unit "${ing.unit}" on "${food.description}"` };
   return { grams: ing.quantity * (pick.gramWeight / pick.amount) };

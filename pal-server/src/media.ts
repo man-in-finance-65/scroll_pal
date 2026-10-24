@@ -95,7 +95,9 @@ export async function fetchMedia(url: string, platform: Platform): Promise<Media
 function ytdlpError(e: unknown): string {
   const err = e as { stderr?: string; message?: string };
   const line = (err.stderr || err.message || String(e)).split("\n").reverse().find((l) => l.includes("ERROR"));
-  return (line || err.message || "unknown error").replace(/^ERROR:\s*/, "").slice(0, 300);
+  // "ERROR: [youtube] abc: Sign in to confirm you're not a bot. Use --cookies..." -> "youtube: Sign in to confirm you're not a bot."
+  const msg = (line || err.message || "unknown error").replace(/^ERROR:\s*/, "").replace(/^\[(\w+)\] [\w-]+: /, "$1: ");
+  return (msg.match(/^.*?[.!?](\s|$)/)?.[0] ?? msg).trim().slice(0, 200);
 }
 
 /** Caption-only fallbacks that need no login. TikTok's oEmbed no longer carries the caption (its embed page, above, does). */

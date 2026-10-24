@@ -37,6 +37,13 @@ export function parseFood(d: Detail): UsdaFood | null {
   return { fdcId: d.fdcId, description: d.description, per100g, portions };
 }
 
+type SearchHit = { fdcId: number; foodNutrients?: { nutrientNumber?: string; value?: number }[] };
+// Foundation foods often leave out a macro (meat usually has no carbs row), so a hit only counts if it has all four.
+const hasAllMacros = (h: SearchHit) => {
+  const nums = new Set((h.foodNutrients ?? []).filter((n) => typeof n.value === "number").map((n) => n.nutrientNumber));
+  return ["203", "204", "205"].every((n) => nums.has(n)) && ["208", "957", "958"].some((n) => nums.has(n));
+};
+
 /** USDA FoodData Central lookup with an in-memory cache. Uses curated datasets only (Foundation, SR Legacy). */
 export function createUsda(apiKey: string | undefined, fetchImpl: typeof fetch = fetch): UsdaLookup {
   const cache = new Map<string, Promise<UsdaFood | null>>();
@@ -52,12 +59,14 @@ export function createUsda(apiKey: string | undefined, fetchImpl: typeof fetch =
     let hit = cache.get(key);
     if (!hit) {
       hit = (async () => {
-        const search = (await get("/foods/search", { query: key, dataType: "Foundation,SR Legacy", pageSize: "1" })) as {
-          foods?: { fdcId: number }[];
+        const search = (await get("/foods/search", { query: key, dataType: "Foundation,SR Legacy", pageSize: "5" })) as {
+          foods?: SearchHit[];
         };
-        const id = search.foods?.[0]?.fdcId;
-        if (!id) return null;
-        return parseFood((await get(`/food/${id}`, {})) as Detail);
+        for (const h of (search.foods ?? []).filter(hasAllMacros).slice(0, 2)) {
+          const food = parseFood((await get(`/food/${h.fdcId}`, {})) as Detail);
+          if (food) return food;
+        }
+        return null;
       })();
       hit.catch(() => cache.delete(key)); // do not cache failures
       cache.set(key, hit);

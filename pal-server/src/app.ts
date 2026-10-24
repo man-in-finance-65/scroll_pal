@@ -153,7 +153,8 @@ export function createApp(deps: Deps, config: Config) {
         });
       }
       // Header, not a body field, so the body stays exactly the agreed recipe shape.
-      const note = media.audioError ? `Built from the caption only (${media.audioError}).` : null;
+      // HTTP headers must be plain ASCII (yt-dlp messages contain curly quotes).
+      const note = media.audioError ? `Built from the caption only (${media.audioError})`.replace(/[\u2018\u2019]/g, "'").replace(/[^\x20-\x7e]/g, "") : null;
       ingestCache.set(parsed.url, { recipe: strict.data, note });
       if (note) res.set("x-pal-note", note);
       res.json(strict.data);
@@ -224,6 +225,10 @@ export function createApp(deps: Deps, config: Config) {
       deltas,
       original_macros: original.macros,
       unmatched: [...new Set([...unmatchedOf(original.lines), ...results.flatMap((r) => r.unmatched)])],
+      // Why each one is left out of the totals, so the app can say it instead of hiding it.
+      unmatched_detail: [...original.lines, ...results.map((r) => r.replLine)].flatMap((l) =>
+        l.status === "unmatched" ? [{ name: l.name, reason: l.reason }] : [],
+      ),
     };
     fitCache.set(cacheKey, out);
     res.json(out);
