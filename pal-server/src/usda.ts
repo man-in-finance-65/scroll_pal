@@ -55,13 +55,18 @@ const PicksSchema = z.object({ picks: z.array(z.object({ name: z.string(), fdc_i
  * can come back as fried and battered), so we fetch the top candidates and let the model pick the right one.
  * Macros always come from the USDA record itself. Curated datasets only (Foundation, SR Legacy). Cached per name.
  */
-export function createUsda(apiKey: string | undefined, pick: FoodPicker, fetchImpl: typeof fetch = fetch): UsdaMatcher {
+export function createUsda(apiKey: string | undefined, pick: FoodPicker, fetchImpl: typeof fetch = fetch, retryDelayMs = 500): UsdaMatcher {
   const cache = new Map<string, UsdaFood | null>();
+  const limited = concurrency(4);
+  // USDA answers 503/429 to bursts, so at most 4 requests run at once and a busy answer is retried with backoff.
   const get = async (path: string, params: Record<string, string>) => {
     const qs = new URLSearchParams({ ...params, api_key: apiKey! });
-    const res = await fetchImpl(`${BASE}${path}?${qs}`);
-    if (!res.ok) throw new Error(`USDA ${path} returned ${res.status}`);
-    return res.json();
+    for (let attempt = 0; ; attempt++) {
+      const res = await limited(() => fetchImpl(`${BASE}${path}?${qs}`));
+      if (res.ok) return res.json();
+      if (attempt >= 3 || (res.status !== 429 && res.status < 500)) throw new Error(`USDA ${path} returned ${res.status}`);
+      await new Promise((r) => setTimeout(r, retryDelayMs * 2 ** attempt));
+    }
   };
   return async (names) => {
     if (!apiKey) throw new Error("USDA_API_KEY is not set");
@@ -88,5 +93,20 @@ export function createUsda(apiKey: string | undefined, pick: FoodPicker, fetchIm
       );
     }
     return new Map(names.map((n) => [n, cache.get(n.trim().toLowerCase()) ?? null]));
+  };
+}
+
+function concurrency(max: number) {
+  let active = 0;
+  const queue: (() => void)[] = [];
+  return async <T>(fn: () => Promise<T>): Promise<T> => {
+    if (active >= max) await new Promise<void>((r) => queue.push(r));
+    active++;
+    try {
+      return await fn();
+    } finally {
+      active--;
+      queue.shift()?.();
+    }
   };
 }

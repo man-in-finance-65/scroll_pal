@@ -42,3 +42,20 @@ test("USDA: a picked id that was never offered is not trusted", async () => {
   const usda = createUsda("k", async () => ({ picks: [{ name: "chicken breast", fdc_id: 999 }] }), fakeUsda([]));
   assert.equal((await usda(["chicken breast"])).get("chicken breast"), null);
 });
+
+test("USDA: a 503 is retried, and never more than 4 requests run at once", async () => {
+  let active = 0, peak = 0, failedOnce = false;
+  const inner = fakeUsda([]);
+  const flaky = (async (url: string, init?: RequestInit) => {
+    active++; peak = Math.max(peak, active);
+    await new Promise((r) => setTimeout(r, 5));
+    active--;
+    if (!failedOnce) { failedOnce = true; return new Response("busy", { status: 503 }); }
+    return inner(url, init);
+  }) as typeof fetch;
+  const names = Array.from({ length: 10 }, (_, i) => `chicken breast ${i}`);
+  const usda = createUsda("k", async () => ({ picks: names.map((name) => ({ name, fdc_id: 3 })) }), flaky, 1);
+  const m = await usda(names);
+  assert.equal(m.get("chicken breast 0")?.per100g.calories, 120);
+  assert.ok(peak <= 4, `peak concurrency ${peak}`);
+});
