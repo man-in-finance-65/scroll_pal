@@ -1,0 +1,24 @@
+name: Deploy Pal server
+
+# Tests pal-server/ and deploys it to Cloud Run (service pal-server). Keys stay in Google Secret Manager;
+# the service keeps them between deploys. Needs GCP_SA_KEY + GCP_PROJECT_ID (scripts/connect-github.sh).
+on:
+  push:
+    branches: [claude/relaxed-hypatia-vwaro9]
+    paths: ["pal-server/**", ".github/workflows/pal-server.yml"]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: pal-server/package-lock.json }
+      - run: npm ci && npx tsc --noEmit && npm test
+        working-directory: pal-server
+      - uses: google-github-actions/auth@v2
+        with: { credentials_json: "${{ secrets.GCP_SA_KEY }}" }
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud run deploy pal-server --project "${{ secrets.GCP_PROJECT_ID }}" --source pal-server --region us-central1 --quiet
+      - run: curl -fsS "${{ vars.PAL_API_URL }}/health"

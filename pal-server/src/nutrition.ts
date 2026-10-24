@@ -4,9 +4,11 @@ import type { Ingredient, Macros } from "./schema.js";
 export type Portion = { label: string; amount: number; gramWeight: number };
 export type UsdaFood = { fdcId: number; description: string; per100g: Macros; portions: Portion[] };
 export type UsdaLookup = (name: string) => Promise<UsdaFood | null>;
+/** Matches a whole ingredient list in one go (the model picks among USDA candidates in a single call). */
+export type UsdaMatcher = (names: string[]) => Promise<Map<string, UsdaFood | null>>;
 
 export type Line =
-  | { name: string; status: "matched"; grams: number; macros: Macros }
+  | { name: string; status: "matched"; grams: number; macros: Macros; usda: string }
   | { name: string; status: "unmatched"; reason: string };
 
 export const ZERO: Macros = { calories: 0, protein_g: 0, carbs_g: 0, fat_g: 0 };
@@ -108,5 +110,5 @@ export async function resolveLine(ing: Pick<Ingredient, "name" | "quantity" | "u
   if (!food) return { name: ing.name, status: "unmatched", reason: "no USDA match" };
   const g = gramsFor(ing, food);
   if ("reason" in g) return { name: ing.name, status: "unmatched", reason: g.reason };
-  return { name: ing.name, status: "matched", grams: g.grams, macros: scale(food.per100g, g.grams / 100) };
+  return { name: ing.name, status: "matched", grams: g.grams, macros: scale(food.per100g, g.grams / 100), usda: food.description };
 }

@@ -1,0 +1,35 @@
+name: Publish Pal app
+
+# Type-checks pal-app/ and publishes it to Expo (project scroll-pal, branch + channel "pal") for Expo Go.
+# Needs EXPO_TOKEN (already set), PAL_APP_SECRET secret and PAL_API_URL variable (scripts/connect-github.sh).
+on:
+  push:
+    branches: [claude/relaxed-hypatia-vwaro9]
+    paths: ["pal-app/**", ".github/workflows/pal-app.yml"]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: pal-app }
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_URL: ${{ vars.PAL_API_URL }}
+      EXPO_PUBLIC_APP_SECRET: ${{ secrets.PAL_APP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: pal-app/package-lock.json }
+      - run: npm ci && npx tsc --noEmit
+      - run: |
+          [ -n "$EXPO_PUBLIC_API_URL" ] && [ -n "$EXPO_PUBLIC_APP_SECRET" ] || { echo "::error::PAL_API_URL or PAL_APP_SECRET missing: run scripts/connect-github.sh"; exit 1; }
+      - run: npx -y eas-cli@latest channel:create pal --non-interactive || echo "channel pal already exists"
+      - run: npx -y eas-cli@latest update --branch pal --message "${{ github.event.head_commit.message || 'manual publish' }}" --non-interactive --json | tee ../update.json
+      - name: Links for Expo Go
+        run: |
+          PID=$(node -p 'require("./app.json").expo.extra.eas.projectId')
+          GROUP=$(node -e 'const u=require("../update.json");console.log((Array.isArray(u)?u:[u])[0]?.group||"")')
+          echo "### Pal published" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Always-latest link: \`exp://u.expo.dev/$PID?channel-name=pal&runtime-version=exposdk:58.0.0\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- This update: \`exp://u.expo.dev/$PID/group/$GROUP\`" >> "$GITHUB_STEP_SUMMARY"

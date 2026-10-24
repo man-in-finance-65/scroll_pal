@@ -1,16 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
-import { LlmPantry, LlmRecipe, LlmSwaps, type Goal, type Recipe } from "./schema.js";
+import { LlmFoodPicks, LlmPantry, LlmRecipe, LlmSwaps, type Goal, type Recipe } from "./schema.js";
+import type { Candidate } from "./usda.js";
 import type { Segment } from "./whisper.js";
 
 let client: Anthropic | null = null;
 
-async function askJson(schema: z.ZodType, system: string, user: Anthropic.MessageParam["content"]): Promise<unknown> {
+async function askJson(schema: z.ZodType, system: string, user: Anthropic.MessageParam["content"], model?: string): Promise<unknown> {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   client ??= new Anthropic();
   const msg = await client.messages.create({
-    model: process.env.CLAUDE_MODEL || "claude-sonnet-5-5",
+    model: model ?? (process.env.CLAUDE_MODEL || "claude-sonnet-5-5"),
     max_tokens: 4000,
     system,
     messages: [{ role: "user", content: user }],
@@ -73,5 +74,21 @@ export function scanPantry(base64: string, mediaType: ImageType): Promise<unknow
       { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
       { type: "text", text: "List the staples in this photo." },
     ],
+  );
+}
+
+/** Raw (unvalidated) choice of USDA record per ingredient. A small model is enough: it only picks from a list. */
+export function pickFoods(items: { name: string; candidates: Candidate[] }[]): Promise<unknown> {
+  const list = items
+    .map((i) => `INGREDIENT: ${i.name}\n${i.candidates.map((c) => `  ${c.fdcId}: ${c.description}`).join("\n")}`)
+    .join("\n\n");
+  return askJson(
+    LlmFoodPicks,
+    "For each recipe ingredient, pick the USDA food that is that ingredient as a cook buys it: raw and plain unless the " +
+      "name says otherwise (cooked, canned, light, fat-free...). Match the form: \"chicken breast\" is raw breast meat, not " +
+      "fried or with skin; \"penne pasta\" is dry pasta. Use fdc_id null when no candidate is a reasonable match, or the " +
+      "ingredient has no meaningful nutrition (water, pasta water, ice). Copy each ingredient name exactly.",
+    list,
+    process.env.CLAUDE_PICK_MODEL || "claude-haiku-5-5",
   );
 }

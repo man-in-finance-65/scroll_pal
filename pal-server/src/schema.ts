@@ -95,3 +95,4 @@ export const StrictSwaps = z.object({
 });
 
 export const LlmPantry = z.object({ staples: z.array(z.string()) });
+export const LlmFoodPicks = z.object({ picks: z.array(z.object({ name: z.string(), fdc_id: z.number().nullable() })) });

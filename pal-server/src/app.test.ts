@@ -35,7 +35,7 @@ async function start(over: Partial<Deps> = {}, config: Partial<Config> = {}) {
       ],
     }),
     scanPantry: async () => ({ staples: ["Extra Virgin Olive Oil", "kosher salt", "Black Pepper", "olive oil", "2 garlic bulbs"] }),
-    usda: async (n) => FOODS[n] ?? null,
+    usda: async (names) => new Map(names.map((n) => [n, FOODS[n] ?? null])),
     ...over,
   };
   const s = createApp(deps, { appSecret: SECRET, secrets: ["sk-ant-SUPERSECRETKEY"], ...config }).listen(0);

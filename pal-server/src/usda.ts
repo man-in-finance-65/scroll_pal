@@ -1,5 +1,6 @@
 import type { Macros } from "./schema.js";
-import type { Portion, UsdaFood, UsdaLookup } from "./nutrition.js";
+import { z } from "zod";
+import type { Portion, UsdaFood, UsdaMatcher } from "./nutrition.js";
 
 const BASE = "https://api.nal.usda.gov/fdc/v1";
 
@@ -37,40 +38,55 @@ export function parseFood(d: Detail): UsdaFood | null {
   return { fdcId: d.fdcId, description: d.description, per100g, portions };
 }
 
-type SearchHit = { fdcId: number; foodNutrients?: { nutrientNumber?: string; value?: number }[] };
+type SearchHit = { fdcId: number; description: string; foodNutrients?: { nutrientNumber?: string; value?: number }[] };
 // Foundation foods often leave out a macro (meat usually has no carbs row), so a hit only counts if it has all four.
 const hasAllMacros = (h: SearchHit) => {
   const nums = new Set((h.foodNutrients ?? []).filter((n) => typeof n.value === "number").map((n) => n.nutrientNumber));
   return ["203", "204", "205"].every((n) => nums.has(n)) && ["208", "957", "958"].some((n) => nums.has(n));
 };
 
-/** USDA FoodData Central lookup with an in-memory cache. Uses curated datasets only (Foundation, SR Legacy). */
-export function createUsda(apiKey: string | undefined, fetchImpl: typeof fetch = fetch): UsdaLookup {
-  const cache = new Map<string, Promise<UsdaFood | null>>();
+export type Candidate = { fdcId: number; description: string };
+/** Picks, for each ingredient, which USDA candidate it really is (or null). Only a choice: never numbers. */
+export type FoodPicker = (items: { name: string; candidates: Candidate[] }[]) => Promise<unknown>;
+const PicksSchema = z.object({ picks: z.array(z.object({ name: z.string(), fdc_id: z.number().nullable() })) });
+
+/**
+ * USDA FoodData Central lookup for a whole ingredient list at once. USDA's own ranking is poor ("chicken breast"
+ * can come back as fried and battered), so we fetch the top candidates and let the model pick the right one.
+ * Macros always come from the USDA record itself. Curated datasets only (Foundation, SR Legacy). Cached per name.
+ */
+export function createUsda(apiKey: string | undefined, pick: FoodPicker, fetchImpl: typeof fetch = fetch): UsdaMatcher {
+  const cache = new Map<string, UsdaFood | null>();
   const get = async (path: string, params: Record<string, string>) => {
     const qs = new URLSearchParams({ ...params, api_key: apiKey! });
     const res = await fetchImpl(`${BASE}${path}?${qs}`);
     if (!res.ok) throw new Error(`USDA ${path} returned ${res.status}`);
     return res.json();
   };
-  return (name) => {
-    const key = name.trim().toLowerCase();
-    if (!apiKey) return Promise.reject(new Error("USDA_API_KEY is not set"));
-    let hit = cache.get(key);
-    if (!hit) {
-      hit = (async () => {
-        const search = (await get("/foods/search", { query: key, dataType: "Foundation,SR Legacy", pageSize: "5" })) as {
-          foods?: SearchHit[];
-        };
-        for (const h of (search.foods ?? []).filter(hasAllMacros).slice(0, 2)) {
-          const food = parseFood((await get(`/food/${h.fdcId}`, {})) as Detail);
-          if (food) return food;
-        }
-        return null;
-      })();
-      hit.catch(() => cache.delete(key)); // do not cache failures
-      cache.set(key, hit);
+  return async (names) => {
+    if (!apiKey) throw new Error("USDA_API_KEY is not set");
+    const keys = [...new Set(names.map((n) => n.trim().toLowerCase()))].filter((k) => !cache.has(k));
+    const searched = await Promise.all(
+      keys.map(async (name) => {
+        const r = (await get("/foods/search", { query: name, dataType: "Foundation,SR Legacy", pageSize: "10" })) as { foods?: SearchHit[] };
+        return { name, candidates: (r.foods ?? []).filter(hasAllMacros).map((h) => ({ fdcId: h.fdcId, description: h.description })) };
+      }),
+    );
+    const toPick = searched.filter((s) => s.candidates.length);
+    for (const s of searched) if (!s.candidates.length) cache.set(s.name, null);
+    if (toPick.length) {
+      const parsed = PicksSchema.safeParse(await pick(toPick));
+      if (!parsed.success) throw new Error(`the model's USDA picks failed validation: ${parsed.error.message}`);
+      const chosen = new Map(parsed.data.picks.map((p) => [p.name.trim().toLowerCase(), p.fdc_id]));
+      await Promise.all(
+        toPick.map(async (s) => {
+          const id = chosen.get(s.name);
+          // An id that was not offered is treated as no match, never trusted.
+          if (id == null || !s.candidates.some((c) => c.fdcId === id)) return void cache.set(s.name, null);
+          cache.set(s.name, parseFood((await get(`/food/${id}`, {})) as Detail));
+        }),
+      );
     }
-    return hit;
+    return new Map(names.map((n) => [n, cache.get(n.trim().toLowerCase()) ?? null]));
   };
 }

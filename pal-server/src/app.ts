@@ -4,8 +4,8 @@ import { buildCart, CartRequest } from "./cart.js";
 import { HttpError } from "./errors.js";
 import { normalizePantryList } from "./pantry.js";
 import {
-  perPortion, resolveLine, sumLines, swapDelta, truncMacros, addMacros, ZERO,
-  type Line, type UsdaLookup,
+  perPortion, resolveLine, sumLines, swapDelta, trunc1, truncMacros, addMacros, ZERO,
+  type Line, type UsdaLookup, type UsdaMatcher,
 } from "./nutrition.js";
 import { GoalFitRequest, LlmPantry, LlmRecipe, RecipeSchema, StrictSwaps, type Goal, type Recipe } from "./schema.js";
 import { parseSupportedUrl, unsupportedUrlMessage, type Platform } from "./urls.js";
@@ -19,7 +19,7 @@ export type Deps = {
   extractRecipe: (input: ExtractInput) => Promise<unknown>;
   proposeSwaps: (recipe: Recipe, goal: Goal) => Promise<unknown>;
   scanPantry: (base64: string, mediaType: ImageType) => Promise<unknown>;
-  usda: UsdaLookup;
+  usda: UsdaMatcher;
 };
 
 export type Config = {
@@ -42,8 +42,16 @@ const badModelOutput = (what: string, err: ZodLike | Error) =>
   });
 
 /** Per-portion macros of a recipe, from USDA. Unmatched ingredients are listed and left out. */
-async function analyse(ingredients: Recipe["ingredients"], portions: number, usda: UsdaLookup) {
-  const lines = await Promise.all(ingredients.map((i) => resolveLine(i, usda)));
+/** One USDA match for the whole list, served to resolveLine as a per-name lookup. A failed match fails every line loudly. */
+function batchLookup(names: string[], usda: UsdaMatcher): UsdaLookup {
+  const all = usda(names);
+  all.catch(() => {}); // the rejection is reported per line by resolveLine
+  return async (name) => (await all).get(name) ?? null;
+}
+
+async function analyse(ingredients: Recipe["ingredients"], portions: number, usda: UsdaMatcher) {
+  const lookup = batchLookup(ingredients.map((i) => i.name), usda);
+  const lines = await Promise.all(ingredients.map((i) => resolveLine(i, lookup)));
   return { lines, macros: truncMacros(perPortion(sumLines(lines), portions)) };
 }
 const unmatchedOf = (lines: Line[]) => lines.filter((l) => l.status === "unmatched").map((l) => l.name);
@@ -191,9 +199,10 @@ export function createApp(deps: Deps, config: Config) {
     });
 
     const original = await analyse(recipe.ingredients, portions, deps.usda);
+    const replLookup = batchLookup(picked.map((p) => p.swap.replacement.name), deps.usda);
     const results = await Promise.all(
       picked.map(async ({ idx, swap }) => {
-        const repl = await resolveLine(swap.replacement, deps.usda);
+        const repl = await resolveLine(swap.replacement, replLookup);
         const delta = swapDelta(original.lines[idx], repl, portions);
         return {
           idx,
@@ -225,6 +234,13 @@ export function createApp(deps: Deps, config: Config) {
       deltas,
       original_macros: original.macros,
       unmatched: [...new Set([...unmatchedOf(original.lines), ...results.flatMap((r) => r.unmatched)])],
+      // Every original ingredient with the USDA food it matched and its share of the whole recipe (not per portion),
+      // so the app can show the math behind each total.
+      breakdown: original.lines.map((l) =>
+        l.status === "matched"
+          ? { name: l.name, usda: l.usda, grams: trunc1(l.grams), macros: truncMacros(l.macros) }
+          : { name: l.name, usda: null, grams: null, macros: null, reason: l.reason },
+      ),
       // Why each one is left out of the totals, so the app can say it instead of hiding it.
       unmatched_detail: [...original.lines, ...results.map((r) => r.replLine)].flatMap((l) =>
         l.status === "unmatched" ? [{ name: l.name, reason: l.reason }] : [],
