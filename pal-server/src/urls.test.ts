@@ -33,3 +33,10 @@ test("error message lists the patterns and echoes what was received", () => {
   assert.match(m, /youtube\.com\/shorts\/\*/);
   assert.match(m, /Received: https:\/\/example\.com\/x/);
 });
+
+import { checkDuration } from "./media.js";
+test("videos over 3 minutes are rejected with their length; 3:00 and unknown pass", () => {
+  assert.throws(() => checkDuration(181), /Video is 3:01 long\. Pal only takes videos up to 3:00\./);
+  checkDuration(180);
+  checkDuration(undefined);
+});

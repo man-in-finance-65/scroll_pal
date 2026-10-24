@@ -1,24 +1,41 @@
+import { timingSafeEqual } from "node:crypto";
 import express from "express";
+import { buildCart, CartRequest } from "./cart.js";
 import { HttpError } from "./errors.js";
+import { normalizePantryList } from "./pantry.js";
 import {
   perPortion, resolveLine, sumLines, swapDelta, truncMacros, addMacros, ZERO,
   type Line, type UsdaLookup,
 } from "./nutrition.js";
-import { GoalFitRequest, LlmRecipe, RecipeSchema, StrictSwaps, type Goal, type Recipe } from "./schema.js";
+import { GoalFitRequest, LlmPantry, LlmRecipe, RecipeSchema, StrictSwaps, type Goal, type Recipe } from "./schema.js";
 import { parseSupportedUrl, unsupportedUrlMessage, type Platform } from "./urls.js";
 import type { Media } from "./media.js";
 import type { Segment } from "./whisper.js";
-import type { ExtractInput } from "./llm.js";
+import type { ExtractInput, ImageType } from "./llm.js";
 
 export type Deps = {
   fetchMedia: (url: string, platform: Platform) => Promise<Media>;
   transcribe: (audioPath: string) => Promise<Segment[]>;
   extractRecipe: (input: ExtractInput) => Promise<unknown>;
   proposeSwaps: (recipe: Recipe, goal: Goal) => Promise<unknown>;
+  scanPantry: (base64: string, mediaType: ImageType) => Promise<unknown>;
   usda: UsdaLookup;
 };
 
+export type Config = {
+  /** Every /v1 request must send this in the X-App-Secret header. */
+  appSecret: string;
+  instacartKey?: string;
+  /** Requests allowed per IP per window, across all /v1 endpoints. */
+  rateLimit?: { max: number; windowMs: number };
+  /** Values that must never appear in logs or error responses (API keys). */
+  secrets?: string[];
+};
+
 type ZodLike = { issues: unknown[] };
+/** A failed call to the model (no key, network, API error) is not a validation failure; JSON garbage is. */
+const modelFailed = (e: unknown) =>
+  e instanceof SyntaxError ? badModelOutput("output", e) : new HttpError(502, `The AI request failed: ${(e as Error).message}`);
 const badModelOutput = (what: string, err: ZodLike | Error) =>
   new HttpError(502, `The model returned ${what} that failed validation. Nothing was returned.`, {
     validation_error: "issues" in err ? err.issues : err.message,
@@ -31,37 +48,91 @@ async function analyse(ingredients: Recipe["ingredients"], portions: number, usd
 }
 const unmatchedOf = (lines: Line[]) => lines.filter((l) => l.status === "unmatched").map((l) => l.name);
 
-export function createApp(deps: Deps) {
-  const app = express();
-  app.use(express.json({ limit: "2mb" }));
+function checkSecret(expected: string): express.RequestHandler {
+  const want = Buffer.from(expected);
+  return (req, _res, next) => {
+    const got = Buffer.from(String(req.get("x-app-secret") ?? ""));
+    if (got.length !== want.length || !timingSafeEqual(got, want)) {
+      throw new HttpError(401, "Missing or wrong X-App-Secret header. The app and server must use the same APP_SECRET.");
+    }
+    next();
+  };
+}
 
-  const ingestCache = new Map<string, Recipe>();
+/** Fixed-window per-IP limiter, in memory (resets when the server restarts; fine for one small instance). */
+function rateLimit({ max, windowMs }: { max: number; windowMs: number }): express.RequestHandler {
+  const hits = new Map<string, { n: number; reset: number }>();
+  return (req, res, next) => {
+    const now = Date.now();
+    const key = req.ip ?? "unknown";
+    const h = hits.get(key);
+    if (!h || h.reset < now) hits.set(key, { n: 1, reset: now + windowMs });
+    else if (++h.n > max) {
+      const wait = Math.ceil((h.reset - now) / 1000);
+      res.set("retry-after", String(wait));
+      throw new HttpError(429, `Too many requests: limit is ${max} per ${windowMs / 60_000} min. Try again in ${wait} s.`);
+    }
+    if (hits.size > 5000) for (const [k, v] of hits) if (v.reset < now) hits.delete(k);
+    next();
+  };
+}
+
+/** Image magic bytes -> media type. Only formats the vision model accepts. */
+function sniffImage(buf: Buffer): ImageType | null {
+  if (buf[0] === 0xff && buf[1] === 0xd8) return "image/jpeg";
+  if (buf.subarray(0, 4).toString("hex") === "89504e47") return "image/png";
+  if (buf.subarray(0, 4).toString() === "RIFF" && buf.subarray(8, 12).toString() === "WEBP") return "image/webp";
+  return null;
+}
+
+export function createApp(deps: Deps, config: Config) {
+  const app = express();
+  // Cloud Run sits behind Google's proxy; trust it so req.ip is the phone's address, not the proxy's.
+  app.set("trust proxy", true);
+  const redact = (text: string) =>
+    (config.secrets ?? []).filter((k) => k.length >= 8).reduce((t, k) => t.split(k).join("[redacted]"), text);
+
+  app.get("/health", (_req, res) => void res.json({ ok: true }));
+  app.use("/v1", rateLimit(config.rateLimit ?? { max: 60, windowMs: 15 * 60_000 }), checkSecret(config.appSecret));
+  // Pantry photos arrive as base64; a phone photo resized by the app is well under this.
+  app.use(express.json({ limit: "8mb" }));
+
+  const ingestCache = new Map<string, { recipe: Recipe; note: string | null }>();
   const fitCache = new Map<string, unknown>();
 
   app.post("/v1/ingest", async (req, res) => {
     const parsed = parseSupportedUrl(req.body?.url);
     if (!parsed) throw new HttpError(400, unsupportedUrlMessage(req.body?.url));
     const cached = ingestCache.get(parsed.url);
-    if (cached) return void res.json(cached);
+    if (cached) {
+      if (cached.note) res.set("x-pal-note", cached.note);
+      return void res.json(cached.recipe);
+    }
 
     let media: Media;
     try {
       media = await deps.fetchMedia(parsed.url, parsed.platform);
     } catch (e) {
+      if (e instanceof HttpError) throw e;
       throw new HttpError(502, `Could not download the video: ${(e as Error).message}`);
     }
     try {
-      const transcript = await deps.transcribe(media.audioPath).catch((e) => {
-        throw new HttpError(502, `Transcription failed: ${(e as Error).message}`);
-      });
+      const transcript = media.audioPath
+        ? await deps.transcribe(media.audioPath).catch((e) => {
+            throw new HttpError(502, `Transcription failed: ${(e as Error).message}`);
+          })
+        : null;
       let raw: unknown;
       try {
         raw = await deps.extractRecipe({ caption: media.caption, transcript });
       } catch (e) {
-        throw badModelOutput("output", e as Error);
+        throw modelFailed(e);
       }
       const llm = LlmRecipe.safeParse(raw);
       if (!llm.success) throw badModelOutput("a recipe", llm.error);
+      if (!llm.data.ingredients.length && media.audioError) {
+        throw new HttpError(502, `No recipe found. Pal could only read the caption (${media.audioError}) and it has no recipe in it.`);
+      }
 
       // The model never does macro math: they come from USDA.
       const { macros, lines } = await analyse(
@@ -81,7 +152,10 @@ export function createApp(deps: Deps) {
           unmatched: lines,
         });
       }
-      ingestCache.set(parsed.url, strict.data);
+      // Header, not a body field, so the body stays exactly the agreed recipe shape.
+      const note = media.audioError ? `Built from the caption only (${media.audioError}).` : null;
+      ingestCache.set(parsed.url, { recipe: strict.data, note });
+      if (note) res.set("x-pal-note", note);
       res.json(strict.data);
     } finally {
       await media.cleanup();
@@ -100,7 +174,7 @@ export function createApp(deps: Deps) {
     try {
       raw = await deps.proposeSwaps(recipe, goal);
     } catch (e) {
-      throw badModelOutput("output", e as Error);
+      throw modelFailed(e);
     }
     const proposed = StrictSwaps.safeParse(raw);
     if (!proposed.success) throw badModelOutput("swaps", proposed.error);
@@ -155,11 +229,42 @@ export function createApp(deps: Deps) {
     res.json(out);
   });
 
+  app.post("/v1/pantry-scan", async (req, res) => {
+    const image = req.body?.image;
+    if (typeof image !== "string" || !image) throw new HttpError(400, `Expected { image: "<base64>" }, got ${typeof image}.`);
+    const data = image.replace(/^data:[^,]*,/, "");
+    const mediaType = sniffImage(Buffer.from(data.slice(0, 32), "base64"));
+    if (!mediaType) throw new HttpError(400, "The image must be a base64 JPEG, PNG or WebP. Its first bytes match none of those.");
+    let raw: unknown;
+    try {
+      raw = await deps.scanPantry(data, mediaType);
+    } catch (e) {
+      throw modelFailed(e);
+    }
+    const parsed = LlmPantry.safeParse(raw);
+    if (!parsed.success) throw badModelOutput("a pantry list", parsed.error);
+    res.json({ staples: normalizePantryList(parsed.data.staples) });
+  });
+
+  app.post("/v1/cart", async (req, res) => {
+    const body = CartRequest.safeParse(req.body);
+    if (!body.success) throw new HttpError(400, "Invalid cart request.", { validation_error: body.error.issues });
+    try {
+      res.json(await buildCart(body.data, config.instacartKey));
+    } catch (e) {
+      throw new HttpError(502, (e as Error).message);
+    }
+  });
+
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-    if (err instanceof HttpError) return void res.status(err.status).json({ error: err.message, ...err.extra });
+    if (err instanceof HttpError) {
+      return void res.status(err.status).json(JSON.parse(redact(JSON.stringify({ error: err.message, ...err.extra }))));
+    }
     if (err instanceof SyntaxError) return void res.status(400).json({ error: "Request body is not valid JSON." });
-    console.error(err);
-    res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });
+    const type = (err as { type?: string }).type;
+    if (type === "entity.too.large") return void res.status(413).json({ error: "Request is too large (limit 8 MB). Use a smaller photo." });
+    console.error(redact(err instanceof Error ? (err.stack ?? err.message) : String(err)));
+    res.status(500).json({ error: redact(err instanceof Error ? err.message : "Internal error") });
   });
   return app;
 }

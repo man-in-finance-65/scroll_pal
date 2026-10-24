@@ -11,6 +11,13 @@ Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns 
 - Landing page + hidden Google Sheet (Apps Script) for the "be Pal's pal" count and feedback, added with the owner's OK, 2026-10-23.
 - Animation: react-native-reanimated springs. Rings: react-native-svg. Haptics: expo-haptics.
 
+## Pal (pal-app/, pal-server/), owner's OK 2026-10-24
+- New Pal build lives in pal-app/ and pal-server/; the old app/ and api/ stay untouched.
+- Claude reads recipes, swaps and pantry photos; OpenAI Whisper transcribes video audio; USDA FoodData Central gives macros. No Gemini in Pal.
+- Hosting stays on Google Cloud Run (service "pal-server").
+- Pal XP: +50 per dish cooked, +20 for hitting the protein goal, +10 for zero food waste (replaces the 10 XP rule below for Pal).
+- Voice commands use on-device speech recognition (needs a development build).
+
 ## Rules
 - Levels: 30 XP each. A digested link and a completed cook are worth 10 XP each, so 3 links = 1 level at every level (owner's change, 2026-10-23, "for now"; links max 3 a day). Before this only cooks could level Pal up.
 - Every ingredient and macro has source: "stated" | "estimated". Estimated ones show a "~" in the UI.

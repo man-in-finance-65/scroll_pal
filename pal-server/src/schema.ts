@@ -93,3 +93,5 @@ export const StrictSwaps = z.object({
     }),
   ),
 });
+
+export const LlmPantry = z.object({ staples: z.array(z.string()) });

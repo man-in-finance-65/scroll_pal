@@ -1,12 +1,12 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import type { z } from "zod";
-import { LlmRecipe, LlmSwaps, type Goal, type Recipe } from "./schema.js";
+import { LlmPantry, LlmRecipe, LlmSwaps, type Goal, type Recipe } from "./schema.js";
 import type { Segment } from "./whisper.js";
 
 let client: Anthropic | null = null;
 
-async function askJson(schema: z.ZodType, system: string, user: string): Promise<unknown> {
+async function askJson(schema: z.ZodType, system: string, user: Anthropic.MessageParam["content"]): Promise<unknown> {
   if (!process.env.ANTHROPIC_API_KEY) throw new Error("ANTHROPIC_API_KEY is not set");
   client ??= new Anthropic();
   const msg = await client.messages.create({
@@ -21,11 +21,11 @@ async function askJson(schema: z.ZodType, system: string, user: string): Promise
   return JSON.parse(text.text); // a JSON syntax error is reported by the caller as a bad model output
 }
 
-export type ExtractInput = { caption: string; transcript: Segment[] };
+export type ExtractInput = { caption: string; transcript: Segment[] | null };
 
 /** Raw (unvalidated) recipe from the model. The caller validates it. */
 export function extractRecipe({ caption, transcript }: ExtractInput): Promise<unknown> {
-  const lines = transcript.map((s) => `[${Math.floor(s.start)}s] ${s.text}`).join("\n");
+  const lines = (transcript ?? []).map((s) => `[${Math.floor(s.start)}s] ${s.text}`).join("\n");
   return askJson(
     LlmRecipe,
     "You turn a short cooking video into a structured recipe. Use only what the caption and transcript say or clearly imply. " +
@@ -34,7 +34,7 @@ export function extractRecipe({ caption, transcript }: ExtractInput): Promise<un
       "Use quantity and unit as stated; when a quantity is not stated, pick a sensible one for the portions. " +
       "Use a unit like cup, tbsp, tsp, g, oz, lb, ml, or an empty string for countable things (e.g. 2 eggs). " +
       "video_timestamp_sec is the transcript time where the step is spoken; null if you cannot tell. Never write macros.",
-    `CAPTION:\n${extractCaption(caption)}\n\nTRANSCRIPT (with seconds):\n${lines || "(no speech)"}`,
+    `CAPTION:\n${extractCaption(caption)}\n\nTRANSCRIPT (with seconds):\n${transcript ? lines || "(no speech)" : "(audio unavailable: use the caption only; set every video_timestamp_sec to null)"}`,
   );
 }
 const extractCaption = (c: string) => c.slice(0, 4000);
@@ -56,5 +56,22 @@ export function proposeSwaps(recipe: Recipe, goal: Goal): Promise<unknown> {
       "Propose at most 5 swaps. Each `original` must be copied exactly from the ingredient list. " +
       "Give the replacement a plain food name and a realistic quantity and unit. Never write calorie or macro numbers.",
     `Goal: ${goal} (${GOAL_HINT[goal]}).\nRecipe: ${recipe.recipe.title}, ${recipe.recipe.portions} portions.\nIngredients:\n${list}`,
+  );
+}
+
+export type ImageType = "image/jpeg" | "image/png" | "image/webp";
+
+/** Raw (unvalidated) list of staples visible in a pantry/fridge photo. */
+export function scanPantry(base64: string, mediaType: ImageType): Promise<unknown> {
+  return askJson(
+    LlmPantry,
+    "You look at a photo of a kitchen shelf, spice rack, pantry or fridge and list the cooking staples you can clearly see: " +
+      "salt, pepper, oils, vinegars, sauces, spices, dried herbs, flour, sugar, rice, garlic, onions, butter, eggs, and similar. " +
+      "Use short plain names (\"olive oil\", \"soy sauce\", \"paprika\"), no brands, no quantities. " +
+      "Only list items you can actually see or read on a label. If you cannot see any, return an empty list.",
+    [
+      { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+      { type: "text", text: "List the staples in this photo." },
+    ],
   );
 }
