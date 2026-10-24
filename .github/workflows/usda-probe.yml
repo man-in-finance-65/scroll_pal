@@ -1,0 +1,15 @@
+name: USDA probe (temporary)
+on:
+  push:
+    branches: [claude/relaxed-hypatia-vwaro9]
+    paths: [".github/workflows/usda-probe.yml"]
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          B="https://api.nal.usda.gov/fdc/v1"
+          for q in "query=salt&dataType=Foundation,SR%20Legacy&pageSize=10" "query=salt&dataType=Foundation,SR%20Legacy&pageSize=5" "query=salt&dataType=SR%20Legacy&pageSize=10" "query=salt&pageSize=10" "query=chicken%20breast&dataType=Foundation&dataType=SR%20Legacy&pageSize=10"; do
+            echo "== $q -> $(curl -s -o /tmp/o -w '%{http_code}' "$B/foods/search?api_key=DEMO_KEY&$q") $(head -c 160 /tmp/o)"
+          done
+          echo "== POST -> $(curl -s -o /tmp/o -w '%{http_code}' -X POST "$B/foods/search?api_key=DEMO_KEY" -H 'content-type: application/json' -d '{"query":"chicken breast","dataType":["Foundation","SR Legacy"],"pageSize":10}') $(head -c 300 /tmp/o)"
