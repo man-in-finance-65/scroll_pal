@@ -3,7 +3,7 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Keyboard, Pressable, Text, TextInput, View } from "react-native";
 import { Pal } from "../../components/Pal";
-import { Button, Card, ComingSoon, FadeIn, Screen, SpeechBubble, Title } from "../../components/ui";
+import { Button, Card, FadeIn, Screen, SpeechBubble, Title } from "../../components/ui";
 import { fx } from "../../lib/fx";
 import type { PalState } from "../../lib/mood";
 import { useStore } from "../../lib/store";
@@ -54,7 +54,7 @@ export default function Add() {
 
   return (
     <Screen>
-      <Title sub="Paste any cooking link: YouTube, Instagram, TikTok, a recipe site. Paste another while I chew.">Got a link?</Title>
+      <Title>Got a recipe link?</Title>
 
       <View style={{ alignItems: "center", gap: space.sm }}>
         {lastFailed && !busy ? <SpeechBubble>Mmm… that was difficult to digest.</SpeechBubble> : null}
@@ -80,22 +80,19 @@ export default function Add() {
             <Text style={{ color: t.tint, fontWeight: "700", fontSize: 16 }}>Paste</Text>
           </Pressable>
         </View>
-        <Button title="Let me digest this link" onPress={go} disabled={!url.trim()} />
-        <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Each link I digest = +10 XP (3 a day max). 3 links = a level.</Text>
+        <Button title="Feed me!" onPress={go} disabled={!url.trim()} />
       </View>
-
-      <ComingSoon title="Watching Instagram & TikTok videos" body="For now I read the caption and page of those posts. Soon I'll watch the video itself, like I do with YouTube." />
 
       {s.jobs.length > 0 && (
         <View style={{ gap: space.sm }}>
-          <Text style={[type.label, { color: t.sub }]}>Digesting</Text>
+          <Text style={[type.label, { color: t.sub }]}>Chewing</Text>
           {s.jobs.map((j) => <JobCard key={j.id} job={j} />)}
         </View>
       )}
 
       {s.recipes.length > 0 && (
         <View style={{ gap: space.sm }}>
-          <Text style={[type.label, { color: t.sub }]}>Your recipes</Text>
+          <Text style={[type.label, { color: t.sub }]}>Our recipes</Text>
           {s.recipes.map((r) => (
             <Pressable key={r.title} onPress={() => { s.openRecipe(r); router.push("/recipe"); }}>
               <Card style={{ paddingVertical: space.md }}>
@@ -128,7 +125,7 @@ function JobCard({ job }: { job: Job }) {
               {job.status === "done" ? job.title : host(job.url)}
             </Text>
             <Text numberOfLines={2} style={[type.caption, { color: t.sub }]}>
-              {job.status === "digesting" ? "Digesting… videos can take a minute." : job.status === "done" ? "Digested! +10 XP" : job.error}
+              {job.status === "digesting" ? "Videos take me a minute…" : job.status === "done" ? (job.xp ? `Yum! +${job.xp} XP` : "Yum! That's my 3 for today.") : job.error}
             </Text>
           </View>
           {job.status !== "digesting" && (
@@ -138,7 +135,7 @@ function JobCard({ job }: { job: Job }) {
           )}
         </View>
         {job.status === "done" && (
-          <Button title="Open recipe" kind="secondary" onPress={() => { const r = s.recipes.find((x) => x.title === job.title); if (r) s.openRecipe(r); s.dismissJob(job.id); router.push("/recipe"); }} />
+          <Button title="Show me" kind="secondary" onPress={() => { const r = s.recipes.find((x) => x.title === job.title); if (r) s.openRecipe(r); s.dismissJob(job.id); router.push("/recipe"); }} />
         )}
         {job.status === "failed" && job.detail ? <Text style={[type.caption, { color: t.faint }]}>Technical note: {job.detail}</Text> : null}
         {needCaption && (
@@ -146,12 +143,12 @@ function JobCard({ job }: { job: Job }) {
             <TextInput
               value={caption}
               onChangeText={setCaption}
-              placeholder="Copy the post's caption and paste it here."
+              placeholder="Paste the post's caption for me"
               placeholderTextColor={t.faint}
               multiline
               style={{ backgroundColor: t.cardAlt, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 16, minHeight: 90, textAlignVertical: "top" }}
             />
-            <Button title="Let me digest the caption" disabled={!caption.trim()} onPress={() => { s.dismissJob(job.id); s.digest(job.url, caption.trim()); }} />
+            <Button title="Feed me the caption" disabled={!caption.trim()} onPress={() => { s.dismissJob(job.id); s.digest(job.url, caption.trim()); }} />
           </View>
         )}
       </Card>

@@ -1,9 +1,8 @@
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useId, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View, type ViewStyle } from "react-native";
-import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
+import Animated, { useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
 import { brand, radius, space, type, useTheme } from "../lib/theme";
 
 import { fx } from "../lib/fx";
@@ -45,8 +44,8 @@ export function Card({ children, style }: { children: ReactNode; style?: ViewSty
   );
 }
 
-// Apple Health-style number card: coloured label, big number, small unit, the maths underneath.
-export function NumberCard({ label, value, unit, color, math, style }: { label: string; value: string; unit?: string; color: string; math?: string; style?: ViewStyle }) {
+// Apple Health-style number card: coloured label, big number, small unit. The result only; the maths lives behind Details.
+export function NumberCard({ label, value, unit, color, style }: { label: string; value: string; unit?: string; color: string; style?: ViewStyle }) {
   const t = useTheme();
   return (
     <Card style={{ flex: 1, minWidth: 140, gap: 2, ...style }}>
@@ -55,7 +54,6 @@ export function NumberCard({ label, value, unit, color, math, style }: { label: 
         <Text style={type.bigNumber}>{value}</Text>
         {unit ? <Text style={[type.h2, { color: t.sub }]}> {unit}</Text> : null}
       </Text>
-      {math ? <Text style={[type.caption, { color: t.sub }]}>{math}</Text> : null}
     </Card>
   );
 }
@@ -119,39 +117,6 @@ export function Segmented<T extends string>({ options, value, onChange }: { opti
   );
 }
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
-
-// One activity ring, like Apple Fitness. Fills with a spring.
-export function Ring({ value, target, size = 120, stroke = 16, children }: { value: number; target: number; size?: number; stroke?: number; children?: ReactNode }) {
-  const t = useTheme();
-  const gid = "ring" + useId().replace(/[^a-zA-Z0-9]/g, "");
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const p = useSharedValue(0);
-  useEffect(() => {
-    p.value = withSpring(Math.min(1, target ? value / target : 0), { damping: 14, stiffness: 70 });
-  }, [value, target]);
-  const props = useAnimatedProps(() => ({ strokeDashoffset: c * (1 - p.value) }));
-  return (
-    <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
-      <Svg width={size} height={size} style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}>
-        <Defs>
-          <SvgGradient id={gid} x1="0" y1="0" x2="1" y2="1">
-            <Stop offset="0" stopColor="#34D399" />
-            <Stop offset="1" stopColor="#5BC8FF" />
-          </SvgGradient>
-        </Defs>
-        <Circle cx={size / 2} cy={size / 2} r={r} stroke={t.ringTrack} strokeWidth={stroke} fill="none" />
-        <AnimatedCircle
-          cx={size / 2} cy={size / 2} r={r} stroke={`url(#${gid})`} strokeWidth={stroke} fill="none"
-          strokeLinecap="round" strokeDasharray={`${c} ${c}`} animatedProps={props}
-        />
-      </Svg>
-      {children}
-    </View>
-  );
-}
-
 // Bar that fills with a spring (XP).
 export function Bar({ value, max, color = brand.violet }: { value: number; max: number; color?: string }) {
   const t = useTheme();
@@ -198,18 +163,12 @@ export function SpeechBubble({ children }: { children: ReactNode }) {
   );
 }
 
-// A greyed-out card for something that isn't built yet, so nobody wonders why it doesn't work.
-export function ComingSoon({ title, body }: { title: string; body: string }) {
+// Placeholder: will open the maths behind a number plus one line from Pal. Not wired up yet (step 1 of the build).
+export function DetailsButton() {
   const t = useTheme();
   return (
-    <View style={{ backgroundColor: t.card, borderRadius: radius.lg, padding: space.lg, gap: 6, opacity: 0.7, borderWidth: 1.5, borderStyle: "dashed", borderColor: t.faint }}>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: space.sm }}>
-        <Text style={[type.h2, { color: t.text, flex: 1 }]}>{title}</Text>
-        <View style={{ backgroundColor: brand.violet + "22", borderRadius: 99, paddingHorizontal: 10, paddingVertical: 4 }}>
-          <Text style={{ color: brand.violet, fontWeight: "800", fontSize: 12 }}>COMING SOON</Text>
-        </View>
-      </View>
-      <Text style={[type.caption, { color: t.sub }]}>{body}</Text>
-    </View>
+    <Pressable onPress={() => fx.tap()} hitSlop={8} accessibilityRole="button" accessibilityLabel="Details" style={{ alignSelf: "flex-start" }}>
+      <Text style={{ color: t.tint, fontWeight: "700", fontSize: 14 }}>Details ›</Text>
+    </Pressable>
   );
 }

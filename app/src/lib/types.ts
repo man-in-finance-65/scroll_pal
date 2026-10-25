@@ -26,7 +26,7 @@ export type PlanFromApi = {
   days: { day: number; slots: { slot: string; meal: string; kind: SlotKind; note: string }[] }[];
 };
 
-export type SlotStatus = "planned" | "done" | "skipped";
+export type SlotStatus = "planned" | "eaten";
 export type PlanSlot = {
   id: string;
   day: number;
@@ -46,17 +46,7 @@ export type Plan = {
   summary: string;
   recipe: Recipe;
   slots: PlanSlot[];
-  confirmed: boolean;
 };
 
-export type Stamp = { key: string; label: string; kind: "cuisine" | "creator"; at: string };
-export type CookLog = { at: string; title: string; cuisine: string; creator: string };
-export type ChecklistItem = { name: string; amount: string; math: string | null; estimated: boolean; checked: boolean };
-
-// A saved chat with Pal, so closing it never loses the conversation.
-export type ChatMsg = { from: "pal" | "me"; text: string; key: string };
-export type ChatStep = { id: string; apiId?: string; ask: string; chips: string[]; hint?: string };
-export type ChatSave = { log: ChatMsg[]; step: ChatStep; finished: boolean; asked: string[] };
-
 // One link Pal is digesting right now. Lives in memory only.
-export type Job = { id: string; url: string; caption?: string; status: "digesting" | "done" | "failed"; error?: string; detail?: string; code?: string; title?: string };
+export type Job = { id: string; url: string; caption?: string; status: "digesting" | "done" | "failed"; error?: string; detail?: string; code?: string; title?: string; xp?: number };

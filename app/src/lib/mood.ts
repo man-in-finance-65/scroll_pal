@@ -16,23 +16,21 @@ export function cooksThisWeek(events: XpEvent[], now = new Date()): number {
   return events.filter((e) => e.type === "cook" && new Date(e.at).getTime() >= start).length;
 }
 
-// The ring's target: the cooks in your current plan (plans are at most 7 days). 3 if there's no plan yet.
+// This week's target, which sets Pal's energy: the cooks in your current plan (plans are at most 7 days). 3 if there's no plan yet.
 export function weeklyTarget(slots: PlanSlot[] | undefined): number {
   if (!slots?.length) return 3;
   return Math.max(1, slots.filter((s) => s.kind === "cook").length);
 }
 
-// A planned cook whose day has passed without Done counts as missed.
+// A planned cook whose day has passed and is still untouched counts as missed.
 export function missedCooks(slots: PlanSlot[] | undefined, now = new Date()): PlanSlot[] {
   const today = localDay(now.toISOString());
   return (slots ?? []).filter((s) => s.kind === "cook" && s.status === "planned" && s.date < today);
 }
 
-// Pal goes slow after a skip (or a missed cook) and stays slow until the next Done.
+// Pal goes slow after a missed cook and stays slow until the next cook.
 export function isSlow(events: XpEvent[], slots: PlanSlot[] | undefined, now = new Date()): boolean {
   const lastCook = [...events].reverse().find((e) => e.type === "cook")?.at ?? "";
-  const lastSkip = [...events].reverse().find((e) => e.type === "skip")?.at ?? "";
-  if (lastSkip && lastSkip > lastCook) return true;
   // A missed day "happens" at the end of that day.
   return missedCooks(slots, now).some((s) => {
     const [y, m, d] = s.date.split("-").map(Number);
@@ -45,11 +43,11 @@ export type Mood = { energy: number; label: string; line: string };
 export function mood(slow: boolean, weekCooks: number, target: number, totalCooks: number): Mood {
   const ratio = Math.min(1, weekCooks / target);
   const energy = slow ? 0.25 : 0.45 + 0.55 * ratio;
-  if (slow) return { energy, label: "Slow", line: "I'm feeling slow after a missed cook. My level is safe though. Cook one meal and I'll wake right up." };
-  if (totalCooks === 0) return { energy, label: "Curious", line: "Paste a cooking link and let me digest it." };
-  if (ratio >= 1) return { energy, label: "Fired up", line: "Week goal hit! I'm so fired up." };
-  if (weekCooks > 0) return { energy, label: "Happy", line: `${target - weekCooks} more ${target - weekCooks === 1 ? "cook" : "cooks"} to close the ring.` };
-  return { energy, label: "Hungry", line: "Nothing cooked yet this week. Pick a meal from your plan?" };
+  if (slow) return { energy, label: "Slow", line: "Feeling slow. Cook with me?" };
+  if (totalCooks === 0) return { energy, label: "Curious", line: "Feed me a recipe!" };
+  if (ratio >= 1) return { energy, label: "Fired up", line: "I'm so fired up!" };
+  if (weekCooks > 0) return { energy, label: "Happy", line: "More, chef!" };
+  return { energy, label: "Hungry", line: "I'm hungry. Cook with me?" };
 }
 
 // How Pal's body looks. Bulk builds up (broader, sturdier); cut gets leaner and lighter

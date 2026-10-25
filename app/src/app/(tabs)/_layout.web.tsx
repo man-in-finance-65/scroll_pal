@@ -6,10 +6,8 @@ import { useTheme } from "../../lib/theme";
 // Phones keep using _layout.tsx (NativeTabs), which this file doesn't touch.
 const tabs = [
   { name: "index", title: "Pal", icon: "✨" },
-  { name: "add", title: "Digest", icon: "➕" },
+  { name: "add", title: "Share", icon: "➕" },
   { name: "plan", title: "Plan", icon: "📅" },
-  { name: "goals", title: "Goals", icon: "🎯" },
-  { name: "passport", title: "Passport", icon: "🌎" },
 ];
 
 export default function TabsLayout() {

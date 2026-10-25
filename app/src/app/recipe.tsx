@@ -1,9 +1,8 @@
 import { router } from "expo-router";
-import { useState } from "react";
-import { Image, Linking, Platform, Pressable, Text, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Image, Pressable, Text, View } from "react-native";
 import { Pal } from "../components/Pal";
-import { Verdict } from "../components/Verdict";
-import { Button, Card, NumberCard, Screen, Segmented } from "../components/ui";
+import { Button, Card, DetailsButton, NumberCard, Screen, Segmented, SpeechBubble } from "../components/ui";
 import { fx } from "../lib/fx";
 import { api, ApiError } from "../lib/api";
 import { est, num, qtyText } from "../lib/format";
@@ -11,7 +10,6 @@ import { useStore } from "../lib/store";
 import { brand, radius, space, type, useTheme } from "../lib/theme";
 import type { Goal } from "../lib/types";
 import { usePal } from "../lib/usePal";
-import { COOK_XP } from "../lib/xp";
 
 const GOALS: { value: Goal; label: string }[] = [
   { value: "bulk", label: "Bulk" },
@@ -26,18 +24,26 @@ export default function RecipeScreen() {
   const [days, setDays] = useState(5);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cooked, setCooked] = useState<number | null>(null); // XP from the last cook, shown for a moment
+  useEffect(() => {
+    if (cooked === null) return;
+    const id = setTimeout(() => setCooked(null), 2200);
+    return () => clearTimeout(id);
+  }, [cooked]);
   const r = s.recipe;
 
   if (!r) {
     return (
       <Screen padTop={false}>
-        <Text style={[type.body, { color: t.sub }]}>No recipe open. Paste a link on the Add tab.</Text>
+        <View style={{ alignItems: "center" }}>
+          <Pal state="listening" size={140} body={pal.body} level={pal.level} />
+        </View>
+        <Button title="Here's a recipe, Pal" onPress={() => router.navigate("/add")} />
       </Screen>
     );
   }
   const m = r.macros_per_serving;
   const ms = m.source;
-  const anyEstimated = ms === "estimated" || r.ingredients.some((i) => i.source === "estimated");
 
   async function build() {
     setBusy(true);
@@ -55,44 +61,35 @@ export default function RecipeScreen() {
     }
   }
 
+  function cook() {
+    const res = s.cook(r!);
+    if (res.leveledUp) fx.levelUp();
+    else fx.done();
+    setCooked(res.xp);
+  }
+
   return (
     <Screen padTop={false}>
       <View style={{ gap: 6 }}>
         <Text style={[type.title, { color: t.text }]}>{r.title}</Text>
-        <Text style={[type.body, { color: t.sub }]}>
-          {r.creator} · {r.cuisine} · serves {r.servings}
-        </Text>
+        <Text style={[type.body, { color: t.sub }]}>{r.creator}</Text>
       </View>
 
       {r.image ? (
         <Image source={{ uri: r.image }} accessibilityLabel={r.title} resizeMode="cover" style={{ width: "100%", aspectRatio: 16 / 10, borderRadius: radius.lg, backgroundColor: t.cardAlt }} />
       ) : null}
 
-      <Card>
-        <Text style={[type.label, { color: brand.mint }]}>How it fits your goal</Text>
-        <Verdict recipe={r} goal={s.goal} />
-        <Segmented options={GOALS} value={s.goal} onChange={s.setGoal} />
-      </Card>
-
       <View style={{ gap: space.md }}>
         <View style={{ flexDirection: "row", gap: space.md }}>
-          <NumberCard label="Energy" value={`${est(ms)}${num(m.kcal, 0)}`} unit="kcal" color={brand.orange} math="per serving" />
-          <NumberCard label="Protein" value={`${est(ms)}${num(m.protein_g)}`} unit="g" color={brand.pink} math="per serving" />
+          <NumberCard label="Energy" value={`${est(ms)}${num(m.kcal, 0)}`} unit="kcal" color={brand.orange} />
+          <NumberCard label="Protein" value={`${est(ms)}${num(m.protein_g)}`} unit="g" color={brand.pink} />
         </View>
         <View style={{ flexDirection: "row", gap: space.md }}>
-          <NumberCard label="Carbs" value={`${est(ms)}${num(m.carbs_g)}`} unit="g" color={brand.blue} math="per serving" />
-          <NumberCard label="Fat" value={`${est(ms)}${num(m.fat_g)}`} unit="g" color={brand.mint} math="per serving" />
+          <NumberCard label="Carbs" value={`${est(ms)}${num(m.carbs_g)}`} unit="g" color={brand.blue} />
+          <NumberCard label="Fat" value={`${est(ms)}${num(m.fat_g)}`} unit="g" color={brand.mint} />
         </View>
-        <NumberCard
-          label="Time"
-          value={`${num(r.prep_minutes + r.cook_minutes, 0)}`}
-          unit="min"
-          color={brand.violet}
-          math={`${num(r.prep_minutes, 0)} prep + ${num(r.cook_minutes, 0)} cook = ${num(r.prep_minutes + r.cook_minutes, 0)} min`}
-        />
-        {anyEstimated && (
-          <Text style={[type.caption, { color: t.sub }]}>~ means I estimated it. Everything else was said or shown in the video.</Text>
-        )}
+        <NumberCard label="Time" value={num(r.prep_minutes + r.cook_minutes, 0)} unit="min" color={brand.violet} />
+        <DetailsButton />
       </View>
 
       <Card>
@@ -108,8 +105,6 @@ export default function RecipeScreen() {
         ))}
       </Card>
 
-      <Button title="Find these ingredients near me" kind="secondary" onPress={() => { Linking.openURL(storesUrl()).catch(() => {}); }} />
-
       <Card>
         <Text style={[type.h2, { color: t.text }]}>Steps</Text>
         {r.steps.map((st, k) => (
@@ -122,14 +117,14 @@ export default function RecipeScreen() {
         ))}
       </Card>
 
+      <Card style={{ alignItems: "center", gap: space.md }}>
+        {cooked !== null && <SpeechBubble>{`Delicious! +${cooked} XP`}</SpeechBubble>}
+        <Pal state={cooked !== null ? "excited" : "helping"} size={110} body={pal.body} level={pal.level} energy={pal.mood.energy} />
+        <Button title="We cooked it!" kind="success" feel="own" onPress={cook} style={{ alignSelf: "stretch" }} />
+      </Card>
+
       <Card style={{ gap: space.md }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-          <Pal state={busy ? "helping" : "listening"} size={72} body={pal.body} level={pal.level} />
-          <View style={{ flex: 1 }}>
-            <Text style={[type.h2, { color: t.text }]}>Let's plan your meals</Text>
-            <Text style={[type.caption, { color: t.sub }]}>Each cook you finish = +{COOK_XP} XP.</Text>
-          </View>
-        </View>
+        <Text style={[type.h2, { color: t.text }]}>Plan it with me</Text>
         <Segmented options={GOALS} value={s.goal} onChange={s.setGoal} />
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={[type.body, { color: t.text }]}>Days</Text>
@@ -140,15 +135,11 @@ export default function RecipeScreen() {
           </View>
         </View>
         {error && <Text style={[type.body, { color: t.danger }]}>{error}</Text>}
-        <Button title={busy ? "Planning…" : "Plan my meals"} onPress={build} loading={busy} />
+        <Button title={busy ? "Planning…" : "Plan it"} onPress={build} loading={busy} />
       </Card>
     </Screen>
   );
 }
-
-// Opens the phone's own maps app on "grocery stores" around wherever you are.
-export const storesUrl = () =>
-  Platform.OS === "ios" ? "http://maps.apple.com/?q=grocery+store" : "geo:0,0?q=grocery+store";
 
 function Step({ label, onPress }: { label: string; onPress: () => void }) {
   const t = useTheme();

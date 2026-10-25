@@ -11,20 +11,12 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Icon sf={{ default: "sparkles", selected: "sparkles" }} md="auto_awesome" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="add">
-        <NativeTabs.Trigger.Label>Digest</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>Share</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "plus.circle", selected: "plus.circle.fill" }} md="add_circle" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
         <NativeTabs.Trigger.Label>Plan</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf={{ default: "calendar", selected: "calendar" }} md="calendar_month" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="goals">
-        <NativeTabs.Trigger.Label>Goals</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: "target", selected: "target" }} md="flag" />
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="passport">
-        <NativeTabs.Trigger.Label>Passport</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: "globe.americas", selected: "globe.americas.fill" }} md="public" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

@@ -1,5 +1,5 @@
 # ScrollPal
-Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns a saved cooking video into a recipe and a weekly plan, then levels up only when the user completes a cook.
+Expo (React Native) app plus a tiny Node/TS API. Pal, a sous-chef companion, turns a shared cooking video into a recipe and a multi-day plan. Pal levels up from three actions only: share a recipe, eat a planned meal, cook with Pal.
 
 ## Stack (do not swap without asking)
 - Expo SDK 58, expo-router, TypeScript. Must run in Expo Go.
@@ -10,11 +10,13 @@ Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns 
 - Sound: expo-audio (added with the owner's OK, 2026-10-23). Sounds are original and synthesized in-house; do not copy anyone's recordings or voice.
 - Landing page + hidden Google Sheet (Apps Script) for the "be Pal's pal" count and feedback, added with the owner's OK, 2026-10-23.
 - Animation: react-native-reanimated springs. Rings: react-native-svg. Haptics: expo-haptics.
+- Pal in 3D: three.js rendered through expo-gl (both run in Expo Go). Approved by the owner on 2026-10-25, to be added at build step 4.
 
 ## Rules
-- Levels: 30 XP each. A digested link and a completed cook are worth 10 XP each, so 3 links = 1 level at every level (owner's change, 2026-10-23, "for now"; links max 3 a day). Before this only cooks could level Pal up.
+- XP: Share = 10, Eat = 25, Cook = 50. Nothing else earns XP. Shares: first 3 a day count. Eat: once per planned meal. Cook: no cap.
+- Levels: one flat cost per level (XP_PER_LEVEL in app/src/lib/xp.ts, 100 for now, a placeholder until the owner confirms). Levels unlock Pal skins and props.
 - Every ingredient and macro has source: "stated" | "estimated". Estimated ones show a "~" in the UI.
-- Show the math for any number the user sees. Never round up.
+- Numbers on screen show the result only, with "~" on estimates. No formulas on screen. A "Details" button opens the math plus one sentence from Pal. Never round up. (Owner's change, 2026-10-25. Before this every number showed its math on screen.)
 - Secrets only in env vars listed in .env.example. Never commit them.
 - Ask before adding a dependency or a new service.
 - Explain non-obvious choices in plain English. I'm not an engineer.
