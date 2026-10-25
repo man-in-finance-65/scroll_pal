@@ -1,8 +1,8 @@
 import { useMemo } from "react";
-import { bodyFor, cooksThisWeek, isSlow, mood, weeklyTarget } from "./mood";
+import { cooksThisWeek, isSlow, mood, weeklyTarget } from "./mood";
 import { useStore } from "./store";
 
-// Everything Pal's look depends on, in one place.
+// Everything Pal's look on Home depends on, in one place.
 export function usePal() {
   const s = useStore();
   return useMemo(() => {
@@ -10,7 +10,6 @@ export function usePal() {
     const slow = isSlow(s.events, slots);
     const weekCooks = cooksThisWeek(s.events);
     const target = weeklyTarget(slots);
-    const m = mood(slow, weekCooks, target, s.progress.cooks);
-    return { slow, weekCooks, target, mood: m, body: bodyFor(s.goal, s.progress.cooks), level: s.progress.level };
-  }, [s.events, s.plan, s.goal, s.progress]);
+    return { slow, weekCooks, target, mood: mood(slow, weekCooks, target, s.progress.cooks), level: s.progress.level };
+  }, [s.events, s.plan, s.progress]);
 }

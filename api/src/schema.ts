@@ -77,7 +77,33 @@ export const FeedbackBody = z.object({
 });
 
 export const EventBody = z.object({
-  type: z.enum(["share", "plan", "done", "skip"]),
+  type: z.enum(["share", "plan", "done", "eat", "skip"]),
   device: z.string().max(64).optional(),
   ref: z.string().max(200).optional(),
+});
+
+// One ingredient swap. kcal_saved is per serving: positive = lighter, negative = more energy (bulking).
+export const Swap = z.object({
+  from: z.string(),
+  to: z.string(),
+  why: z.string(),
+  kcal_saved: z.number(),
+  source: Source,
+});
+
+export const SwapsBody = z.object({
+  recipe: Recipe,
+  goal: Goal,
+  mealKcal: z.number().nullable().optional(),
+});
+
+export const PantryBody = z.object({
+  image: z.string().min(100), // base64, no "data:" prefix
+  mimeType: z.string().regex(/^image\//),
+  ingredients: z.array(z.string()).min(1).max(60),
+});
+
+export const InstacartBody = z.object({
+  title: z.string().max(120),
+  items: z.array(z.object({ name: z.string(), qty: z.number().nullable(), unit: z.string() })).min(1).max(60),
 });

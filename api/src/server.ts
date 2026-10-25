@@ -4,14 +4,18 @@ import { fileURLToPath } from "node:url";
 import { buildPlan, planPrompt } from "./claude.js";
 import { planWithGemini } from "./gemini.js";
 import { IngestError, ingest } from "./ingest.js";
+import { instacartLink, KitchenError, readPantry, swapsFor } from "./kitchen.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
-import { EventBody, FeedbackBody, IngestBody, PalBody, PlanBody } from "./schema.js";
+import { EventBody, FeedbackBody, IngestBody, InstacartBody, PalBody, PantryBody, PlanBody, SwapsBody } from "./schema.js";
 import { sheetTime, toSheet } from "./sheet.js";
 
 const app = express();
 app.set("trust proxy", true); // behind Cloud Run: req.ip is the visitor, not Google
-app.use(express.json({ limit: "200kb" }));
+// Pantry photos are big; everything else is small text, so keep the tight limit there.
+const smallJson = express.json({ limit: "200kb" });
+const photoJson = express.json({ limit: "12mb" });
+app.use((req, res, next) => (req.path === "/v1/pantry" ? photoJson : smallJson)(req, res, next));
 // Phones don't need this; it lets the web preview of the app call the API too.
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -69,6 +73,52 @@ app.post("/v1/plan", async (req: Request, res: Response) => {
     if (tried.length) { note = tried.join(" | "); console.warn(`plan: ${planner} used. ${note}`); }
   }
   res.json({ ...plan, planner, note });
+});
+
+const kitchenFail = (res: Response, e: unknown, what: string) => {
+  if (e instanceof KitchenError) {
+    console.warn(`${what}: ${e.code} ${e.detail ?? ""}`);
+    return res.status(e.status).json({ error: e.code, message: e.message, detail: e.detail });
+  }
+  console.error(`${what} crashed`, e);
+  res.status(500).json({ error: "server_error", message: "Something went wrong in my kitchen. Try again." });
+};
+
+// Pal tunes a recipe to your goal. Never fails: plain rules answer when no AI is set up.
+app.post("/v1/swaps", limit(60), async (req: Request, res: Response) => {
+  const body = SwapsBody.safeParse(req.body);
+  if (!body.success) return bad(res, "Send {recipe, goal, mealKcal?}.");
+  try {
+    const out = await swapsFor(body.data.recipe, body.data.goal, body.data.mealKcal ?? null);
+    if (out.note) console.warn(`swaps: ${out.planner} used. ${out.note}`);
+    res.json(out);
+  } catch (e) {
+    kitchenFail(res, e, "swaps");
+  }
+});
+
+// A photo of your shelves: which of the recipe's ingredients Gemini can see.
+app.post("/v1/pantry", limit(30), async (req: Request, res: Response) => {
+  const body = PantryBody.safeParse(req.body);
+  if (!body.success) return bad(res, "Send {image (base64), mimeType, ingredients[]}.");
+  try {
+    res.json({ have: await readPantry(body.data.image, body.data.mimeType, body.data.ingredients) });
+  } catch (e) {
+    kitchenFail(res, e, "pantry");
+  }
+});
+
+// The missing items as an Instacart shopping page (or a search page until the Instacart key is set).
+app.post("/v1/instacart", limit(30), async (req: Request, res: Response) => {
+  const body = InstacartBody.safeParse(req.body);
+  if (!body.success) return bad(res, "Send {title, items[]}.");
+  try {
+    const out = await instacartLink(body.data.title, body.data.items);
+    console.log(`EVENT type=instacart fallback=${out.fallback} items=${body.data.items.length}`);
+    res.json(out);
+  } catch (e) {
+    kitchenFail(res, e, "instacart");
+  }
 });
 
 // One line per tap, so you can count them in Cloud Run logs:  grep "EVENT type=done"

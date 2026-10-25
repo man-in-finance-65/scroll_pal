@@ -48,7 +48,7 @@ const FOLLOW_UPS: { when: RegExp; step: ChatStep }[] = [
   { when: /love|like|great|good|nice|amazing|cool/i, step: { id: "fu_love", ask: "Ooh, nice. Was it a feature, or more the vibe of me?", chips: ["A feature", "The vibe", "Both"] } },
   { when: /confus|lost|unclear|didn't get|don't get/i, step: { id: "fu_confused", ask: "Which screen threw you off?", chips: SCREENS } },
   { when: /bug|broken|crash|error|doesn't work|not working|stuck/i, step: { id: "fu_bug", ask: "Roughly where did it go wrong?", chips: ["Pasting a link", "The plan", "The chat", "Somewhere else"] } },
-  { when: /idea|should|wish|add|want/i, step: { id: "fu_idea", ask: "Would you use that idea every week, or just now and then?", chips: ["Every week", "Now and then", "Just a nice-to-have"] } },
+  { when: /idea|should|wish|add|want/i, step: { id: "fu_idea", ask: "Would you use that idea every week, or just now and then?", chips: ["Every week", "Now and then", "Just a nice extra"] } },
 ];
 
 // Specific little questions about real features, for when nothing they said matches.

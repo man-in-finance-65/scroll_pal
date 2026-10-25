@@ -4,7 +4,7 @@ import { Plan, Recipe } from "./schema.js";
 
 const PROMPT = `You are reading a cooking video, social post, or recipe page (or its caption) and writing the recipe down.
 Return ONLY the JSON object described by the schema.
-Keep it SHORT: at most 8 steps, each under 20 words. Plain ingredient names.
+Keep it SHORT: at most 8 steps, each under 20 words. Plain ingredient names. No hyphens or dashes: write "5 to 6 minutes", "stir fry".
 Rules:
 - source "stated": the amount or number is said, shown on screen, or written in the caption.
 - source "estimated": you are guessing. Use this whenever you are not sure.

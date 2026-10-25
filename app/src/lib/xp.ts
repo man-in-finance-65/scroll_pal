@@ -1,24 +1,29 @@
 // XP and level rules. Pure functions, no React, so they are easy to test (see xp.test.ts).
 //
 // Plain English:
-// - Digesting a link gives 10 XP, but only the first 3 links each day count.
-// - Completing a cook gives 10 XP.
-// - Every 30 XP is one level, so 3 links (or 3 cooks, or a mix) = one level. Same pace at every level.
+// - Feeding Pal a link gives 10 XP. Only the first 3 links each day count.
+// - Cooking a meal gives 50 XP.
+// - Eating it gives 25 XP. Only the first 3 meals each day count.
+// - Every 100 XP is one level. One full loop (link, cook, eat) is 85 XP.
 // - Skipping a planned cook never takes XP or a level away.
-// (Owner's call, 2026-10-23: links level Pal up too, 3 per level, for now. Before this only cooks could.)
+// (Owner's call, 2026-10-25: share 10, eat 25, cook 50.)
 
 export const SHARE_XP = 10;
 export const SHARE_CAP_PER_DAY = 3;
-export const COOK_XP = 10;
-export const XP_PER_LEVEL = 30;
+export const COOK_XP = 50;
+export const EAT_XP = 25;
+export const EAT_CAP_PER_DAY = 3;
+export const XP_PER_LEVEL = 100;
 
-export type XpEvent = { type: "share" | "cook" | "skip"; at: string };
+export type XpEvent = { type: "share" | "cook" | "eat" | "skip"; at: string };
 
 export type Progress = {
   level: number;
   xp: number;
   cooks: number;
   cookXp: number;
+  eats: number;
+  eatXp: number;
   sharesTotal: number;
   sharesCounted: number;
   shareXp: number;
@@ -38,26 +43,38 @@ const levelForXp = (xp: number) => 1 + Math.floor(xp / XP_PER_LEVEL);
 
 export function computeProgress(events: XpEvent[]): Progress {
   const sorted = [...events].sort((a, b) => a.at.localeCompare(b.at));
-  const sharesPerDay = new Map<string, number>();
+  const perDay = new Map<string, number>(); // "share:2026-10-23" -> how many counted that day
   let xp = 0;
   let level = 1;
   let cooks = 0;
+  let eats = 0;
   let sharesTotal = 0;
   let sharesCounted = 0;
+
+  // True when this event still fits under its daily cap (and counts it).
+  const underCap = (kind: string, at: string, cap: number) => {
+    const key = `${kind}:${localDay(at)}`;
+    const n = perDay.get(key) ?? 0;
+    if (n >= cap) return false;
+    perDay.set(key, n + 1);
+    return true;
+  };
 
   for (const e of sorted) {
     if (e.type === "share") {
       sharesTotal++;
-      const day = localDay(e.at);
-      const today = sharesPerDay.get(day) ?? 0;
-      if (today < SHARE_CAP_PER_DAY) {
-        sharesPerDay.set(day, today + 1);
+      if (underCap("share", e.at, SHARE_CAP_PER_DAY)) {
         sharesCounted++;
         xp += SHARE_XP;
       }
     } else if (e.type === "cook") {
       cooks++;
       xp += COOK_XP;
+    } else if (e.type === "eat") {
+      if (underCap("eat", e.at, EAT_CAP_PER_DAY)) {
+        eats++;
+        xp += EAT_XP;
+      }
     }
     // "skip": no XP change, level kept.
     level = Math.max(level, levelForXp(xp)); // a level never goes down
@@ -69,6 +86,8 @@ export function computeProgress(events: XpEvent[]): Progress {
     xp,
     cooks,
     cookXp: cooks * COOK_XP,
+    eats,
+    eatXp: eats * EAT_XP,
     sharesTotal,
     sharesCounted,
     shareXp: sharesCounted * SHARE_XP,
@@ -77,16 +96,19 @@ export function computeProgress(events: XpEvent[]): Progress {
   };
 }
 
-// The maths shown under the XP bar, e.g. "3 cooks × 10 = 30 · 2 shares × 1 = 2 · total 32 XP".
+const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+
+// The maths shown under the XP bar, e.g. "2 links × 10 = 20 · 1 cook × 50 = 50 · 1 meal × 25 = 25 · total 95 XP".
 export function xpMath(p: Progress): string {
-  const cook = `${p.cooks} ${p.cooks === 1 ? "cook" : "cooks"} × ${COOK_XP} = ${p.cookXp}`;
-  const share = `${p.sharesCounted} ${p.sharesCounted === 1 ? "link" : "links"} × ${SHARE_XP} = ${p.shareXp}`;
-  return `${cook} · ${share} · total ${p.xp} XP`;
+  return [
+    `${plural(p.sharesCounted, "link", "links")} × ${SHARE_XP} = ${p.shareXp}`,
+    `${plural(p.cooks, "cook", "cooks")} × ${COOK_XP} = ${p.cookXp}`,
+    `${plural(p.eats, "meal", "meals")} × ${EAT_XP} = ${p.eatXp}`,
+    `total ${p.xp} XP`,
+  ].join(" · ");
 }
 
 // What's between the user and the next level, in words.
 export function nextLevelHint(p: Progress): string {
-  const missing = p.xpForNext - p.xpIntoLevel;
-  const more = Math.ceil(missing / SHARE_XP);
-  return `${missing} XP to Lv.${p.level + 1} · ${more} more ${more === 1 ? "link or cook" : "links or cooks"}`;
+  return `${p.xpForNext - p.xpIntoLevel} XP to Lv.${p.level + 1}`;
 }

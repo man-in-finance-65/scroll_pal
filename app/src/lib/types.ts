@@ -21,11 +21,6 @@ export type Recipe = {
 export type Goal = "bulk" | "cut" | "maintain";
 export type SlotKind = "cook" | "leftovers" | "simple";
 
-export type PlanFromApi = {
-  summary: string;
-  days: { day: number; slots: { slot: string; meal: string; kind: SlotKind; note: string }[] }[];
-};
-
 export type SlotStatus = "planned" | "done" | "skipped";
 export type PlanSlot = {
   id: string;
@@ -36,6 +31,7 @@ export type PlanSlot = {
   kind: SlotKind;
   note: string;
   status: SlotStatus;
+  recipeTitle?: string; // which of your recipes this cook is (Kitchen Pact plans)
 };
 
 export type Plan = {
@@ -51,7 +47,29 @@ export type Plan = {
 
 export type Stamp = { key: string; label: string; kind: "cuisine" | "creator"; at: string };
 export type CookLog = { at: string; title: string; cuisine: string; creator: string };
-export type ChecklistItem = { name: string; amount: string; math: string | null; estimated: boolean; checked: boolean };
+
+// Your body, for the meal target. Kept on the phone only.
+export type Body = { heightCm: number; weightKg: number; targetKg: number };
+
+// One ingredient Pal swapped to fit your goal. kcal_saved is per serving (negative = more energy, for bulking).
+export type Swap = { from: string; to: string; why: string; kcal_saved: number; source: Source };
+
+// The meal you're on right now, from the link to the plate.
+export type MealStage = "swaps" | "pantry" | "shop" | "wait" | "cook" | "eat" | "done";
+export type Meal = {
+  id: string;
+  recipe: Recipe;
+  swaps: Swap[];
+  have: string[]; // ingredient names you already have
+  orderUrl?: string;
+  stage: MealStage;
+  slotId?: string; // the plan slot this meal fills, if any
+  cookedAt?: string;
+  eatenAt?: string;
+};
+
+// "This week I'll cook N meals with Pal."
+export type Pact = { weekStart: string; meals: number };
 
 // A saved chat with Pal, so closing it never loses the conversation.
 export type ChatMsg = { from: "pal" | "me"; text: string; key: string };

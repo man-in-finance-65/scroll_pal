@@ -115,10 +115,28 @@ function playSound(name: SoundName) {
   }
 }
 
+// Browsers have no haptics API, only navigator.vibrate (Chrome on Android). iPhone Safari and desktop browsers
+// don't have it, so there the tap is sound only. The feature check keeps those browsers from throwing.
+const WEB_MS: Record<Haptics.ImpactFeedbackStyle, number> = { [L]: 10, [M]: 20, [H]: 35 } as Record<Haptics.ImpactFeedbackStyle, number>;
+export const webCanVibrate = () => typeof navigator !== "undefined" && typeof navigator.vibrate === "function";
+function feelWeb(hits: Hit[]) {
+  if (!webCanVibrate()) return;
+  // One pattern: buzz for each hit, pause until the next one. [buzz, pause, buzz, ...]
+  const pattern: number[] = [];
+  let t = 0;
+  hits.forEach(([at, strength], i) => {
+    if (i > 0) pattern.push(Math.max(0, at - t));
+    pattern.push(WEB_MS[strength]);
+    t = at + WEB_MS[strength];
+  });
+  try { navigator.vibrate(pattern); } catch {}
+}
+
 // One vibration per hit of the sound, each on its own timer.
 function feel(name: SoundName, extraAfterMs?: { type: Haptics.NotificationFeedbackType; afterLastHitMs: number }) {
-  if (!native || !prefs.vibration) return;
+  if (!prefs.vibration) return;
   const hits: Hit[] = SOUND_HITS_MS[name];
+  if (!native) return feelWeb(hits);
   hits.forEach(([at, strength]) => setTimeout(() => Haptics.impactAsync(strength).catch(() => {}), at + AUDIO_LATENCY_MS));
   if (extraAfterMs) {
     const last = hits[hits.length - 1][0];
@@ -152,6 +170,8 @@ export const fx = {
     const tier = nextTier();
     both(`nice${tier}` as SoundName, { type: OK, afterLastHitMs: 90 });
   },
+  // Primary buttons (the one big button at the bottom of a screen): always the firm double, never the light knock.
+  primary: () => both("hop2", { type: OK, afterLastHitMs: 60 }),
   levelUp: () => both("levelup", { type: OK, afterLastHitMs: 90 }),
   stamp: () => both("stamp"),
   // Pal finished digesting a link or building a plan.

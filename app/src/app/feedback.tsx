@@ -11,7 +11,6 @@ import { fx } from "../lib/fx";
 import { useStore } from "../lib/store";
 import { radius, space, type, useTheme } from "../lib/theme";
 import type { ChatMsg, ChatSave, ChatStep } from "../lib/types";
-import { usePal } from "../lib/usePal";
 
 // Pal asks for advice like a mate would. No form, no "rate us": one question at a time,
 // tap an answer or say it in your own words. Each answer is saved on its own, and the whole conversation is
@@ -48,7 +47,6 @@ function useKeyboardLift(ref: React.RefObject<ViewInstance | null>) {
 function Chat({ milestone }: { milestone: number }) {
   const t = useTheme();
   const s = useStore();
-  const pal = usePal();
   const insets = useSafeAreaInsets();
   const key = String(milestone);
 
@@ -113,9 +111,9 @@ function Chat({ milestone }: { milestone: number }) {
     alignSelf: mine ? ("flex-end" as const) : ("flex-start" as const),
     maxWidth: "85%" as const,
     backgroundColor: mine ? t.tint : t.card,
-    borderRadius: radius.lg,
-    borderBottomRightRadius: mine ? 6 : radius.lg,
-    borderBottomLeftRadius: mine ? radius.lg : 6,
+    borderRadius: radius.md,
+    borderBottomRightRadius: mine ? 6 : radius.md,
+    borderBottomLeftRadius: mine ? radius.md : 6,
     paddingHorizontal: space.md,
     paddingVertical: 12,
   });
@@ -126,12 +124,12 @@ function Chat({ milestone }: { milestone: number }) {
     <View ref={frame} collapsable={false} style={{ flex: 1, backgroundColor: t.bg }}>
       <ScrollView ref={scroller} style={{ flex: 1 }} contentContainerStyle={{ padding: space.lg, gap: space.md }} keyboardShouldPersistTaps="handled" keyboardDismissMode="interactive">
         <View style={{ alignItems: "center" }}>
-          <Pal state={typing ? "thinking" : finished ? "excited" : "listening"} size={lift ? 70 : 110} body={pal.body} level={pal.level} energy={pal.mood.energy} />
+          <Pal mood={finished ? "cheer" : "cheeky"} size={lift ? 70 : 110} />
         </View>
 
         {log.map((x) => (
           <Animated.View key={x.key} entering={FadeInDown.springify().damping(14)} style={bubble(x.from === "me")}>
-            <Text style={[type.body, { color: x.from === "me" ? "#fff" : t.text }]}>{x.text}</Text>
+            <Text style={[type.body, { color: x.from === "me" ? t.onTint : t.text }]}>{x.text}</Text>
           </Animated.View>
         ))}
 
@@ -154,7 +152,7 @@ function Chat({ milestone }: { milestone: number }) {
               <Pressable
                 key={c}
                 onPress={() => answer(step, c)}
-                style={{ borderWidth: 1.5, borderColor: t.tint, borderRadius: 99, paddingHorizontal: 14, paddingVertical: 10 }}
+                style={{ borderWidth: 1.5, borderColor: t.tint, borderRadius: radius.pill, paddingHorizontal: 14, paddingVertical: 10 }}
               >
                 <Text style={{ color: t.tint, fontWeight: "600", fontSize: 16 }}>{c}</Text>
               </Pressable>
@@ -163,7 +161,7 @@ function Chat({ milestone }: { milestone: number }) {
         )}
 
         {finished ? (
-          <Button title="Back to cooking" onPress={() => router.back()} />
+          <Button title="Back to the kitchen" onPress={() => router.back()} />
         ) : (
           !typing && !lift && <Button title={log.length > 1 ? "Close" : "Not now"} kind="ghost" onPress={() => router.back()} />
         )}
@@ -178,14 +176,14 @@ function Chat({ milestone }: { milestone: number }) {
             placeholder={step.hint ?? "Or type your own answer…"}
             placeholderTextColor={t.faint}
             multiline
-            style={{ flex: 1, backgroundColor: t.card, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 17, maxHeight: 120, borderWidth: 1, borderColor: t.line }}
+            style={{ flex: 1, backgroundColor: t.card, color: t.text, borderRadius: radius.md, padding: space.md, fontSize: 16, maxHeight: 120 }}
           />
           <Pressable
             onPress={() => answer(step, draft)}
             disabled={!draft.trim()}
             style={{ backgroundColor: t.tint, borderRadius: radius.md, paddingHorizontal: space.md, paddingVertical: 14, opacity: draft.trim() ? 1 : 0.4 }}
           >
-            <Text style={{ color: "#fff", fontWeight: "700", fontSize: 16 }}>Send</Text>
+            <Text style={{ color: t.onTint, fontWeight: "700", fontSize: 16 }}>Send</Text>
           </Pressable>
         </View>
       )}

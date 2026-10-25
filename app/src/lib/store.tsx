@@ -1,46 +1,54 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api } from "./api";
-import { num } from "./format";
-import { ApiError } from "./api";
+import { api, ApiError } from "./api";
 import { fx } from "./fx";
-import type { ChatSave, ChecklistItem, CookLog, Goal, Job, Plan, PlanFromApi, Recipe, Stamp } from "./types";
-import { computeProgress, localDay, xpMath, type Progress, type XpEvent } from "./xp";
+import { plain } from "./format";
+import { fillPlan, mondayOf, pactPlan } from "./meal";
+import type { Body, ChatSave, CookLog, Goal, Job, Meal, MealStage, Plan, Recipe, Stamp, Swap } from "./types";
+import { computeProgress, xpMath, type Progress, type XpEvent } from "./xp";
 
 // Everything lives on the phone (AsyncStorage). No accounts, no database.
 type State = {
   deviceId: string;
+  onboarded: boolean;
+  name: string;
   goal: Goal;
+  body: Body | null;
   recipe: Recipe | null; // the recipe currently open
   recipes: Recipe[];
+  meal: Meal | null; // the meal you're on, from link to plate
   plan: Plan | null;
+  pactWeek: string | null; // Monday of the week you made a Kitchen Pact
   events: XpEvent[];
   cookLog: CookLog[];
   stamps: Stamp[];
-  checklist: ChecklistItem[];
   feedbackAsked: number; // highest cook milestone Pal has already chatted about (1 or 3)
   feedbackPending: number; // milestone to chat about once any celebration closes (0 = none)
   chats: Record<string, ChatSave>; // saved conversations, by chat kind ("0", "1", "3")
 };
 
-const KEY = "scrollpal:v1";
+const KEY = "scrollpal:v2"; // v2: the Stitch flow (onboarding, meal, pact). v1 saves are left alone.
 const initial = (): State => ({
   deviceId: Math.random().toString(36).slice(2, 10),
+  onboarded: false,
+  name: "",
   goal: "maintain",
+  body: null,
   recipe: null,
   recipes: [],
+  meal: null,
   plan: null,
+  pactWeek: null,
   events: [],
   cookLog: [],
   stamps: [],
-  checklist: [],
   feedbackAsked: 0,
   feedbackPending: 0,
   chats: {},
 });
 
 export type Celebration = { kind: "level"; level: number; math: string } | { kind: "stamp"; stamp: Stamp };
-export type DoneResult = { leveledUp: boolean; level: number; stamp: Stamp | null; cooks: number; askFeedback: boolean };
+export type DoneResult = { leveledUp: boolean; level: number; stamp: Stamp | null; cooks: number };
 
 type Ctx = State & {
   ready: boolean;
@@ -48,45 +56,30 @@ type Ctx = State & {
   celebration: Celebration | null;
   clearCelebration: () => void;
   jobs: Job[];
-  digest: (url: string, caption?: string) => void; // starts digesting; many can run at once
+  digest: (url: string, caption?: string) => string; // starts digesting and returns the job id; many can run at once
   dismissJob: (id: string) => void;
   saveChat: (key: string, chat: ChatSave) => void;
   clearChat: (key: string) => void;
-  addShare: (recipe: Recipe) => boolean; // true when this link levelled Pal up
   openRecipe: (recipe: Recipe) => void;
+  setName: (name: string) => void;
   setGoal: (g: Goal) => void;
-  savePlan: (p: PlanFromApi, recipe: Recipe, goal: Goal, days: number) => void;
-  confirmPlan: () => number;
-  completeSlot: (id: string) => DoneResult | null;
+  setBody: (b: Body) => void;
+  finishOnboarding: () => void;
+  startMeal: (recipe: Recipe, slotId?: string) => void;
+  setSwaps: (swaps: Swap[]) => void;
+  setHave: (have: string[]) => void;
+  setOrderUrl: (url: string) => void;
+  setStage: (stage: MealStage) => void;
+  cookMeal: () => DoneResult | null; // +50 XP
+  eatMeal: (title?: string) => boolean; // +25 XP; true when it levelled Pal up
+  makePact: (meals: number) => void;
   skipSlot: (id: string) => void;
-  toggleItem: (i: number) => void;
   markFeedbackAsked: (milestone: number) => void;
   resetAll: () => void;
 };
 
 const StoreCtx = createContext<Ctx | null>(null);
-
-function addDays(day: Date, n: number): string {
-  const d = new Date(day.getFullYear(), day.getMonth(), day.getDate() + n, 12);
-  return localDay(d.toISOString());
-}
-
-// Grocery checklist = the recipe's ingredients × the number of fresh batches in the plan.
-function buildChecklist(plan: Plan): ChecklistItem[] {
-  const batches = Math.max(1, plan.slots.filter((s) => s.kind === "cook").length);
-  return plan.recipe.ingredients.map((i) => {
-    if (i.qty === null) return { name: i.name, amount: i.unit || "to taste", math: null, estimated: i.source === "estimated", checked: false };
-    const total = i.qty * batches;
-    const unit = i.unit ? ` ${i.unit}` : "";
-    return {
-      name: i.name,
-      amount: `${num(total, 2)}${unit}`,
-      math: batches > 1 ? `${num(i.qty, 2)}${unit} × ${batches} batches` : null,
-      estimated: i.source === "estimated",
-      checked: false,
-    };
-  });
-}
+const newId = () => Math.random().toString(36).slice(2, 9);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
@@ -94,7 +87,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [celebration, setCelebration] = useState<Celebration | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
-  const handled = useRef(new Set<string>()); // stops a fast double-tap from counting one cook twice
+  const handled = useRef(new Set<string>()); // stops a fast double tap from counting one cook or meal twice
 
   useEffect(() => {
     AsyncStorage.getItem(KEY)
@@ -110,25 +103,38 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const progress = useMemo(() => computeProgress(state.events), [state.events]);
   const update = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
 
-  const addShare = useCallback((recipe: Recipe): boolean => {
+  // Adds an XP event and shows the level up moment when it crosses a level.
+  const addEvent = useCallback((type: XpEvent["type"]): boolean => {
     const before = computeProgress(stateRef.current.events);
-    const events: XpEvent[] = [...stateRef.current.events, { type: "share", at: new Date().toISOString() }];
-    const after = computeProgress(events);
-    if (after.level > before.level) setCelebration({ kind: "level", level: after.level, math: xpMath(after) });
-    update((s) => ({
-      ...s,
-      recipe,
-      recipes: [recipe, ...s.recipes.filter((r) => r.title !== recipe.title)].slice(0, 30),
-      events: [...s.events, { type: "share", at: new Date().toISOString() }],
-    }));
-    api.event("share", stateRef.current.deviceId, recipe.title);
-    return after.level > before.level;
+    const event = { type, at: new Date().toISOString() };
+    const after = computeProgress([...stateRef.current.events, event]);
+    stateRef.current = { ...stateRef.current, events: [...stateRef.current.events, event] };
+    update((s) => ({ ...s, events: [...s.events, event] }));
+    const up = after.level > before.level;
+    if (up) setCelebration({ kind: "level", level: after.level, math: xpMath(after) });
+    return up;
   }, [update]);
+
+  const addShare = useCallback((raw: Recipe): boolean => {
+    const recipe: Recipe = {
+      ...raw,
+      title: plain(raw.title),
+      steps: raw.steps.map(plain),
+      ingredients: raw.ingredients.map((i) => ({ ...i, name: plain(i.name) })),
+    };
+    const up = addEvent("share");
+    update((s) => {
+      const recipes = [recipe, ...s.recipes.filter((r) => r.title !== recipe.title)].slice(0, 30);
+      return { ...s, recipe, recipes, plan: s.plan && fillPlan(s.plan, recipes) };
+    });
+    api.event("share", stateRef.current.deviceId, recipe.title);
+    return up;
+  }, [update, addEvent]);
 
   // Pal can chew on several links at once: each one is a job with its own status.
   const [jobs, setJobs] = useState<Job[]>([]);
   const digest = useCallback((url: string, caption?: string) => {
-    const id = Math.random().toString(36).slice(2, 9);
+    const id = newId();
     setJobs((j) => [{ id, url, caption, status: "digesting" }, ...j]);
     api.ingest(url, caption).then(
       (recipe) => {
@@ -141,51 +147,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setJobs((j) => j.map((x) => (x.id === id ? { ...x, status: "failed", error: e.message, detail: e.detail, code: e.code } : x)));
       },
     );
+    return id;
   }, [addShare]);
   const dismissJob = useCallback((id: string) => setJobs((j) => j.filter((x) => x.id !== id)), []);
   const saveChat = useCallback((key: string, chat: ChatSave) => update((s) => ({ ...s, chats: { ...s.chats, [key]: chat } })), [update]);
   const clearChat = useCallback((key: string) => update((s) => { const { [key]: _, ...rest } = s.chats; return { ...s, chats: rest }; }), [update]);
 
   const openRecipe = useCallback((recipe: Recipe) => update((s) => ({ ...s, recipe })), [update]);
+  const setName = useCallback((name: string) => update((s) => ({ ...s, name })), [update]);
   const setGoal = useCallback((goal: Goal) => update((s) => ({ ...s, goal })), [update]);
+  const setBody = useCallback((body: Body) => update((s) => ({ ...s, body })), [update]);
+  const finishOnboarding = useCallback(() => update((s) => ({ ...s, onboarded: true })), [update]);
 
-  const savePlan = useCallback((p: PlanFromApi, recipe: Recipe, goal: Goal, days: number) => {
-    const today = new Date();
-    const slots = p.days.flatMap((d) =>
-      d.slots.map((sl, i) => ({
-        id: `${d.day}-${i}-${Math.random().toString(36).slice(2, 6)}`,
-        day: d.day,
-        date: addDays(today, d.day - 1),
-        slot: sl.slot,
-        meal: sl.meal,
-        kind: sl.kind,
-        note: sl.note,
-        status: "planned" as const,
-      })),
-    );
-    const plan: Plan = { id: Date.now().toString(36), createdAt: today.toISOString(), goal, days, summary: p.summary, recipe, slots, confirmed: false };
-    update((s) => ({ ...s, plan, goal }));
-    api.event("plan", stateRef.current.deviceId, recipe.title);
-  }, [update]);
+  const setMeal = useCallback((fn: (m: Meal) => Meal) => update((s) => (s.meal ? { ...s, meal: fn(s.meal) } : s)), [update]);
+  const startMeal = useCallback((recipe: Recipe, slotId?: string) =>
+    update((s) => ({ ...s, recipe, meal: { id: newId(), recipe, swaps: [], have: [], stage: "swaps", slotId } })), [update]);
+  // Swap "from" stays exact (it matches an ingredient); what Pal says is cleaned to house style.
+  const setSwaps = useCallback((swaps: Swap[]) => setMeal((m) => ({ ...m, swaps: swaps.map((x) => ({ ...x, to: plain(x.to), why: plain(x.why) })) })), [setMeal]);
+  const setHave = useCallback((have: string[]) => setMeal((m) => ({ ...m, have })), [setMeal]);
+  const setOrderUrl = useCallback((orderUrl: string) => setMeal((m) => ({ ...m, orderUrl })), [setMeal]);
+  const setStage = useCallback((stage: MealStage) => setMeal((m) => ({ ...m, stage })), [setMeal]);
 
-  const confirmPlan = useCallback(() => {
-    const plan = stateRef.current.plan;
-    if (!plan) return 0;
-    const checklist = buildChecklist(plan);
-    update((s) => ({ ...s, plan: s.plan && { ...s.plan, confirmed: true }, checklist }));
-    return checklist.length;
-  }, [update]);
-
-  const completeSlot = useCallback((id: string): DoneResult | null => {
+  const cookMeal = useCallback((): DoneResult | null => {
     const s = stateRef.current;
-    const slot = s.plan?.slots.find((x) => x.id === id);
-    if (!s.plan || !slot || slot.status === "done" || handled.current.has(id)) return null;
-    handled.current.add(id);
+    const meal = s.meal;
+    if (!meal || meal.cookedAt || handled.current.has(`cook:${meal.id}`)) return null;
+    handled.current.add(`cook:${meal.id}`);
     const now = new Date().toISOString();
-    const recipe = s.plan.recipe;
-    const before = computeProgress(s.events);
-    const events = [...s.events, { type: "cook" as const, at: now }];
-    const after = computeProgress(events);
+    const recipe = meal.recipe;
 
     // Passport: first time cooking a cuisine stamps the cuisine; after that, a new creator gets a stamp.
     const has = (key: string) => s.stamps.some((x) => x.key === key);
@@ -197,40 +186,50 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         ? { key: creatorKey, label: recipe.creator, kind: "creator", at: now }
         : null;
 
-    // Pal chats after the 1st cook (one quick question) and the 3rd (a proper catch-up).
-    const milestone = after.cooks === 1 ? 1 : after.cooks === 3 ? 3 : 0;
+    const leveledUp = addEvent("cook");
+    const cooks = computeProgress(stateRef.current.events).cooks;
+    // Pal chats after the 1st cook (one quick question) and the 3rd (a proper catch up).
+    const milestone = cooks === 1 ? 1 : cooks === 3 ? 3 : 0;
     const askFeedback = milestone > 0 && s.feedbackAsked < milestone;
     update((st) => ({
       ...st,
-      events,
-      plan: st.plan && { ...st.plan, slots: st.plan.slots.map((x) => (x.id === id ? { ...x, status: "done" } : x)) },
+      meal: st.meal && { ...st.meal, cookedAt: now, stage: "eat" },
+      plan: st.plan && meal.slotId ? { ...st.plan, slots: st.plan.slots.map((x) => (x.id === meal.slotId ? { ...x, status: "done" } : x)) } : st.plan,
       cookLog: [...st.cookLog, { at: now, title: recipe.title, cuisine: recipe.cuisine, creator: recipe.creator }],
       stamps: stamp ? [...st.stamps, stamp] : st.stamps,
       feedbackPending: askFeedback ? milestone : st.feedbackPending,
     }));
-    api.event("done", s.deviceId, slot.meal);
+    api.event("done", s.deviceId, recipe.title);
+    if (!leveledUp && stamp) setCelebration({ kind: "stamp", stamp });
+    return { leveledUp, level: computeProgress(stateRef.current.events).level, stamp, cooks };
+  }, [update, addEvent]);
 
-    const leveledUp = after.level > before.level;
-    if (leveledUp) setCelebration({ kind: "level", level: after.level, math: xpMath(after) });
-    else if (stamp) setCelebration({ kind: "stamp", stamp });
-    return { leveledUp, level: after.level, stamp, cooks: after.cooks, askFeedback };
-  }, [update]);
+  // Eating the meal you cooked, or logging any meal from Home.
+  const eatMeal = useCallback((title?: string): boolean => {
+    const meal = stateRef.current.meal;
+    const pending = meal && meal.stage === "eat" && !meal.eatenAt ? meal : null;
+    const key = pending ? `eat:${pending.id}` : `eat:${Date.now()}`;
+    if (handled.current.has(key)) return false;
+    handled.current.add(key);
+    const up = addEvent("eat");
+    if (pending) update((s) => ({ ...s, meal: s.meal && { ...s.meal, eatenAt: new Date().toISOString(), stage: "done" } }));
+    api.event("eat", stateRef.current.deviceId, pending?.recipe.title ?? title);
+    return up;
+  }, [update, addEvent]);
+
+  const makePact = useCallback((meals: number) =>
+    update((s) => ({ ...s, pactWeek: mondayOf(), plan: pactPlan({ weekStart: mondayOf(), meals }, s.recipes, s.goal) })), [update]);
 
   const skipSlot = useCallback((id: string) => {
     const s = stateRef.current;
     const slot = s.plan?.slots.find((x) => x.id === id);
     if (!slot || slot.status !== "planned" || handled.current.has(id)) return;
     handled.current.add(id);
-    update((st) => ({
-      ...st,
-      events: [...st.events, { type: "skip", at: new Date().toISOString() }],
-      plan: st.plan && { ...st.plan, slots: st.plan.slots.map((x) => (x.id === id ? { ...x, status: "skipped" } : x)) },
-    }));
+    addEvent("skip");
+    update((st) => ({ ...st, plan: st.plan && { ...st.plan, slots: st.plan.slots.map((x) => (x.id === id ? { ...x, status: "skipped" } : x)) } }));
     api.event("skip", s.deviceId, slot.meal);
-  }, [update]);
+  }, [update, addEvent]);
 
-  const toggleItem = useCallback((i: number) =>
-    update((s) => ({ ...s, checklist: s.checklist.map((c, j) => (j === i ? { ...c, checked: !c.checked } : c)) })), [update]);
   const markFeedbackAsked = useCallback(
     (milestone: number) => update((s) => ({ ...s, feedbackAsked: Math.max(s.feedbackAsked, milestone), feedbackPending: 0 })),
     [update],
@@ -239,8 +238,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const clearCelebration = useCallback(() => setCelebration(null), []);
 
   const value: Ctx = {
-    ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, addShare, openRecipe, setGoal, savePlan,
-    confirmPlan, completeSlot, skipSlot, toggleItem, markFeedbackAsked, resetAll,
+    ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, openRecipe,
+    setName, setGoal, setBody, finishOnboarding, startMeal, setSwaps, setHave, setOrderUrl, setStage, cookMeal, eatMeal,
+    makePact, skipSlot, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

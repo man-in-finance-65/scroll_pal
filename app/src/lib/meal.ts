@@ -1,0 +1,70 @@
+import { num } from "./format";
+import type { Body, Goal, Pact, Plan, PlanSlot, Recipe, Swap } from "./types";
+import { localDay } from "./xp";
+
+// Your energy target per meal, from your body and goal. A simple rule of thumb, so it is marked "~" everywhere:
+// about 30 kcal per kg keeps a body as it is; a cut takes 400 off, a bulk adds 300; split over 3 meals.
+const KCAL_PER_KG = 30;
+const GOAL_SHIFT: Record<Goal, number> = { cut: -400, maintain: 0, bulk: 300 };
+
+export function mealTarget(body: Body | null, goal: Goal): { perMeal: number; perDay: number; math: string } | null {
+  if (!body) return null;
+  const base = body.weightKg * KCAL_PER_KG;
+  const shift = GOAL_SHIFT[goal];
+  const perDay = Math.floor(base + shift);
+  const perMeal = Math.floor(perDay / 3);
+  const shiftText = shift < 0 ? ` minus ${-shift} for your cut` : shift > 0 ? ` plus ${shift} for your bulk` : "";
+  return { perDay, perMeal, math: `${num(body.weightKg)} kg × ${KCAL_PER_KG} = ${Math.floor(base)}${shiftText} = ${perDay} a day, ÷ 3 meals = ${perMeal} per meal` };
+}
+
+// The ingredient list after Pal's swaps.
+export function swappedIngredients(recipe: Recipe, swaps: Swap[]): string[] {
+  const map = new Map(swaps.map((s) => [s.from.toLowerCase(), s.to]));
+  return recipe.ingredients.map((i) => map.get(i.name.toLowerCase()) ?? i.name);
+}
+
+// What to search for in a shop. Rule swaps can be a portion ("Half the cheese"); the shop needs just the item.
+export const shopName = (name: string) => name.replace(/^(half( the)?|1\.5× the)\s+/i, "");
+
+export function kcalAfterSwaps(recipe: Recipe, swaps: Swap[]): number {
+  return Math.max(0, recipe.macros_per_serving.kcal - swaps.reduce((a, s) => a + s.kcal_saved, 0));
+}
+
+// "This week" for the Kitchen Pact: Monday to Sunday, phone time.
+export function mondayOf(now = new Date()): string {
+  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return localDay(d.toISOString());
+}
+
+// A Kitchen Pact plan: N cooks spread evenly over the next 7 days, each one of your recipes (round robin).
+// Slots without a recipe yet get one as soon as you feed Pal a link.
+export function pactPlan(pact: Pact, recipes: Recipe[], goal: Goal, now = new Date()): Plan {
+  const n = Math.max(1, Math.min(7, pact.meals));
+  const slots: PlanSlot[] = Array.from({ length: n }, (_, i) => {
+    const offset = Math.floor((i * 7) / n);
+    const date = localDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset, 12).toISOString());
+    const r = recipes.length ? recipes[i % recipes.length] : undefined;
+    return { id: `pact-${i}-${Date.now().toString(36)}`, day: offset + 1, date, slot: "dinner", meal: r?.title ?? "", kind: "cook", note: "", status: "planned", recipeTitle: r?.title };
+  });
+  return { id: Date.now().toString(36), createdAt: now.toISOString(), goal, days: 7, summary: `${n} meals this week`, recipe: recipes[0], slots, confirmed: true };
+}
+
+// Gives empty pact slots a recipe. Returns the same plan if nothing changed.
+export function fillPlan(plan: Plan, recipes: Recipe[]): Plan {
+  if (!recipes.length || plan.slots.every((s) => s.recipeTitle)) return plan;
+  let k = 0;
+  const slots = plan.slots.map((s) => {
+    if (s.recipeTitle || s.status !== "planned") return s;
+    const r = recipes[k++ % recipes.length];
+    return { ...s, recipeTitle: r.title, meal: r.title };
+  });
+  return { ...plan, slots, recipe: plan.recipe ?? recipes[0] };
+}
+
+// Every Instagram post or reel link in a "Download your information" file (JSON or HTML), newest first, no repeats.
+export function instagramLinks(text: string): string[] {
+  const found = text.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+/g) ?? [];
+  const clean = found.map((u) => u.replace(/^http:/, "https:").replace("://instagram", "://www.instagram").replace("/reels/", "/reel/"));
+  return [...new Set(clean)];
+}

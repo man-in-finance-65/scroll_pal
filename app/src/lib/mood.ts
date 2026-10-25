@@ -1,7 +1,7 @@
-import type { Goal, PlanSlot } from "./types";
+import type { PalMood } from "../components/Pal";
+import type { PlanSlot } from "./types";
 import { localDay, type XpEvent } from "./xp";
 
-export type PalState = "listening" | "thinking" | "excited" | "helping" | "slow";
 
 // Monday 00:00 of this week, in the phone's time zone.
 export function weekStart(now = new Date()): Date {
@@ -40,25 +40,17 @@ export function isSlow(events: XpEvent[], slots: PlanSlot[] | undefined, now = n
   });
 }
 
-export type Mood = { energy: number; label: string; line: string };
+export type Mood = { pal: PalMood; label: string; line: string };
+
+// What Pal looks like and says on Home. Pal starts a little chubby and gets fit once you've cooked a few meals.
+export const FIT_AFTER_COOKS = 3;
 
 export function mood(slow: boolean, weekCooks: number, target: number, totalCooks: number): Mood {
-  const ratio = Math.min(1, weekCooks / target);
-  const energy = slow ? 0.25 : 0.45 + 0.55 * ratio;
-  if (slow) return { energy, label: "Slow", line: "I'm feeling slow after a missed cook. My level is safe though. Cook one meal and I'll wake right up." };
-  if (totalCooks === 0) return { energy, label: "Curious", line: "Paste a cooking link and let me digest it." };
-  if (ratio >= 1) return { energy, label: "Fired up", line: "Week goal hit! I'm so fired up." };
-  if (weekCooks > 0) return { energy, label: "Happy", line: `${target - weekCooks} more ${target - weekCooks === 1 ? "cook" : "cooks"} to close the ring.` };
-  return { energy, label: "Hungry", line: "Nothing cooked yet this week. Pick a meal from your plan?" };
-}
-
-// How Pal's body looks. Bulk builds up (broader, sturdier); cut gets leaner and lighter
-// (taller, slimmer, floats higher). Pal never gets smaller as a reward.
-export type Body = { sx: number; sy: number; float: number; glow: number };
-
-export function bodyFor(goal: Goal, cooks: number): Body {
-  const p = Math.min(cooks, 12) / 12;
-  if (goal === "bulk") return { sx: 1 + 0.16 * p, sy: 1 + 0.06 * p, float: 0, glow: p };
-  if (goal === "cut") return { sx: 1 - 0.1 * p, sy: 1 + 0.1 * p, float: 10 * p, glow: p };
-  return { sx: 1 + 0.03 * p, sy: 1 + 0.03 * p, float: 3 * p, glow: p };
+  const body: PalMood = totalCooks >= FIT_AFTER_COOKS ? "fit" : "chubby";
+  if (slow) return { pal: "worried", label: "Sluggish", line: "We missed a cook. I feel heavy. One meal and I'm back." };
+  if (totalCooks === 0) return { pal: "cheeky", label: "Hungry", line: "Feed me a food video. I'll turn it into dinner." };
+  const left = target - weekCooks;
+  if (left <= 0) return { pal: "cheer", label: "Fired up", line: "Week done! Look at me glow." };
+  if (weekCooks > 0) return { pal: body, label: "Happy", line: `${left} more ${left === 1 ? "cook" : "cooks"} and our week is done.` };
+  return { pal: body, label: "Hungry", line: "Nothing cooked this week. Let's fix that." };
 }

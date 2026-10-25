@@ -1,153 +1,109 @@
 import { router } from "expo-router";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withSpring, withTiming } from "react-native-reanimated";
-import { Pal } from "../../components/Pal";
-import { Button, Card, NumberCard, Screen, Title } from "../../components/ui";
+import { Button, Card, Choice, Pill, Stage } from "../../components/ui";
 import { fx } from "../../lib/fx";
-import type { PalState } from "../../lib/mood";
-import { notifyNow } from "../../lib/notify";
+import { mondayOf } from "../../lib/meal";
 import { useStore } from "../../lib/store";
-import { brand, radius, space, type, useTheme } from "../../lib/theme";
+import { brand, space, type, useTheme } from "../../lib/theme";
 import type { PlanSlot } from "../../lib/types";
-import { usePal } from "../../lib/usePal";
-import { COOK_XP, localDay } from "../../lib/xp";
+import { localDay } from "../../lib/xp";
 
-const KIND_LABEL = { cook: "Cook", leftovers: "Leftovers", simple: "Easy meal" } as const;
+// Plan: first the Kitchen Pact (how many meals we cook this week), then the week itself.
+const COUNTS = [
+  { n: 2, sub: "An easy start" },
+  { n: 3, sub: "Every other day, roughly" },
+  { n: 5, sub: "Most weeknights" },
+  { n: 7, sub: "Every single day" },
+];
 
-function dayTitle(date: string, day: number): string {
-  const today = localDay(new Date().toISOString());
-  const [y, m, d] = date.split("-").map(Number);
-  const label = new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
-  return `Day ${day} · ${date === today ? "Today" : label}`;
+export default function PlanTab() {
+  const s = useStore();
+  const thisWeek = s.pactWeek === mondayOf() && s.plan;
+  return thisWeek ? <Week /> : <Pact />;
 }
 
-export default function PlanScreen() {
-  const t = useTheme();
+function Pact() {
   const s = useStore();
-  const pal = usePal();
-  const [cheer, setCheer] = useState(false);
-  useEffect(() => {
-    if (!cheer) return;
-    const id = setTimeout(() => setCheer(false), 2200);
-    return () => clearTimeout(id);
-  }, [cheer]);
+  const [n, setN] = useState<number | null>(null);
 
-  const plan = s.plan;
-  if (!plan) {
-    return (
-      <Screen>
-        <Title sub="Open a recipe and tap Plan my meals.">Plan</Title>
-        <View style={{ alignItems: "center", paddingVertical: space.xl }}>
-          <Pal state="listening" size={160} body={pal.body} level={pal.level} />
-        </View>
-        <Button title={s.recipe ? "Open your recipe" : "Paste a cooking link"} onPress={() => router.push(s.recipe ? "/recipe" : "/add")} />
-      </Screen>
-    );
-  }
-
-  const cookSlots = plan.slots.filter((x) => x.kind === "cook");
-  const done = cookSlots.filter((x) => x.status === "done").length;
-  const state: PalState = cheer ? "excited" : pal.slow ? "slow" : "helping";
-  const days = [...new Set(plan.slots.map((x) => x.day))].sort((a, b) => a - b);
-
-  async function confirm() {
-    const n = s.confirmPlan();
-    fx.ready();
-    await notifyNow("Cart ready", `${n} items`);
-    router.push("/checklist");
-  }
-
-  function onDone(slot: PlanSlot) {
-    const res = s.completeSlot(slot.id);
-    if (!res) return;
-    if (res.leveledUp) fx.levelUp();
-    else fx.done();
-    setCheer(true);
-  }
-
-  function onSkip(slot: PlanSlot) {
-    fx.skip();
-    s.skipSlot(slot.id);
+  function seal() {
+    if (!n) return;
+    s.makePact(n);
+    // Next: fill the week. With enough recipes the week is already full, so straight to it.
+    if (s.recipes.length < n) router.push("/import");
   }
 
   return (
-    <Screen>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: space.md }}>
-        <View style={{ flex: 1 }}>
-          <Title sub={plan.summary}>Your plan</Title>
-        </View>
-        <Pal state={state} size={96} body={pal.body} level={pal.level} energy={pal.mood.energy} />
+    <Stage
+      mood={n ? "cheer" : "cheeky"}
+      say={n ? `${n} meals. Shake on it?` : "Let's make a pact. How many meals do we cook this week?"}
+      back={false}
+      palSize={140}
+      cta={<Button title="Continue" disabled={!n} onPress={seal} />}
+    >
+      <View style={{ gap: space.sm }}>
+        {COUNTS.map((c) => <Choice key={c.n} title={`${c.n} meals`} sub={c.sub} selected={n === c.n} onPress={() => setN(c.n)} />)}
       </View>
-
-      <View style={{ flexDirection: "row", gap: space.md }}>
-        <NumberCard label="Cooks done" value={`${done}/${cookSlots.length}`} color={brand.mint} math={`${done} × ${COOK_XP} = ${done * COOK_XP} XP earned`} />
-        <NumberCard
-          label="XP left"
-          value={String((cookSlots.length - done) * COOK_XP)}
-          color={brand.violet}
-          math={`${cookSlots.length - done} cooks × ${COOK_XP}`}
-        />
-      </View>
-
-      {plan.confirmed ? (
-        <Button title="Open grocery checklist" kind="secondary" onPress={() => router.push("/checklist")} />
-      ) : (
-        <Button title="Confirm plan → grocery checklist" onPress={confirm} />
-      )}
-
-      {days.map((d) => {
-        const slots = plan.slots.filter((x) => x.day === d);
-        return (
-          <View key={d} style={{ gap: space.sm }}>
-            <Text style={[type.label, { color: t.sub }]}>{dayTitle(slots[0].date, d)}</Text>
-            {slots.map((slot) => (
-              <SlotCard key={slot.id} slot={slot} onDone={() => onDone(slot)} onSkip={() => onSkip(slot)} />
-            ))}
-          </View>
-        );
-      })}
-    </Screen>
+    </Stage>
   );
 }
 
-function SlotCard({ slot, onDone, onSkip }: { slot: PlanSlot; onDone: () => void; onSkip: () => void }) {
-  const t = useTheme();
-  const pop = useSharedValue(1);
-  const xp = useSharedValue(0);
-  const card = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
-  const float = useAnimatedStyle(() => ({ opacity: xp.value === 0 ? 0 : 1 - Math.max(0, xp.value - 0.6) / 0.4, transform: [{ translateY: -40 * xp.value }] }));
-  const color = slot.kind === "cook" ? brand.orange : slot.kind === "leftovers" ? brand.blue : brand.mint;
+function dayLabel(date: string): string {
+  if (date === localDay(new Date().toISOString())) return "Today";
+  const [y, m, d] = date.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" });
+}
 
-  function done() {
-    pop.value = withSequence(withTiming(0.94, { duration: 80 }), withSpring(1, { damping: 6, stiffness: 220 }));
-    xp.value = 0.01;
-    xp.value = withDelay(60, withTiming(1, { duration: 1100 }));
-    onDone();
+function Week() {
+  const t = useTheme();
+  const s = useStore();
+  const slots = s.plan!.slots;
+  const done = slots.filter((x) => x.status === "done").length;
+  const empty = slots.filter((x) => !x.recipeTitle && x.status === "planned").length;
+
+  function cook(slot: PlanSlot) {
+    const recipe = s.recipes.find((r) => r.title === slot.recipeTitle);
+    if (!recipe) return router.push("/meal/feed");
+    s.startMeal(recipe, slot.id);
+    router.push("/meal/swaps");
   }
 
   return (
-    <Animated.View style={card}>
-      <Card style={{ opacity: slot.status === "skipped" ? 0.55 : 1 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={[type.label, { color }]}>
-            {slot.slot} · {KIND_LABEL[slot.kind]}
-          </Text>
-          {slot.status === "done" && <Text style={{ color: t.ok, fontWeight: "800" }}>✓ Done · +{COOK_XP} XP</Text>}
-          {slot.status === "skipped" && <Text style={{ color: t.sub, fontWeight: "700" }}>Skipped</Text>}
-        </View>
-        <Text style={[type.body, { color: t.text, fontWeight: "600" }]}>{slot.meal}</Text>
-        {slot.note ? <Text style={[type.caption, { color: t.sub }]}>{slot.note}</Text> : null}
-        {slot.kind === "cook" && slot.status === "planned" && (
-          <View style={{ flexDirection: "row", gap: space.sm, marginTop: space.xs }}>
-            <Button title="Done" kind="success" feel="own" onPress={done} style={{ flex: 2 }} />
-            <Button title="Skip" kind="secondary" feel="own" onPress={onSkip} style={{ flex: 1 }} />
+    <Stage
+      mood={done === slots.length ? "cheer" : empty ? "cheeky" : "fit"}
+      say={done === slots.length ? "Pact kept! I'm so proud of us." : empty ? `${empty} empty ${empty === 1 ? "night" : "nights"}. Feed me some recipes.` : `${done} of ${slots.length} cooked. Keep going!`}
+      back={false}
+      palSize={120}
+      cta={
+        <>
+          {empty ? <Button title="Fill from Instagram" onPress={() => router.push("/import")} /> : null}
+          <Button title="Feed me a link" kind={empty ? "ghost" : "secondary"} onPress={() => router.push("/meal/feed")} />
+        </>
+      }
+    >
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={[type.label, { color: t.sub }]}>Our pact · {slots.length} meals</Text>
+        <Pill text={`${done} of ${slots.length} cooked`} color={brand.mint} />
+      </View>
+      {slots.map((slot) => (
+        <Card key={slot.id} style={{ flexDirection: "row", alignItems: "center", gap: space.md, opacity: slot.status === "skipped" ? 0.5 : 1 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={[type.label, { color: slot.status === "done" ? brand.mint : brand.orange }]}>{dayLabel(slot.date)}</Text>
+            <Text style={[type.body, { color: slot.recipeTitle ? t.text : t.faint, fontWeight: "600" }]} numberOfLines={2}>
+              {slot.recipeTitle ?? "Empty. Feed me a link."}
+            </Text>
           </View>
-        )}
-      </Card>
-      <Animated.View pointerEvents="none" style={[{ position: "absolute", right: space.lg, bottom: space.lg, backgroundColor: t.ok, borderRadius: radius.sm, paddingHorizontal: 10, paddingVertical: 4 }, float]}>
-        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 16 }}>+{COOK_XP} XP</Text>
-      </Animated.View>
-    </Animated.View>
+          {slot.status === "done" ? <Text style={{ color: brand.mint, fontWeight: "800" }}>✓ Cooked</Text>
+            : slot.status === "skipped" ? <Text style={{ color: t.sub, fontWeight: "700" }}>Skipped</Text>
+            : slot.recipeTitle ? (
+              <View style={{ flexDirection: "row", gap: space.xs }}>
+                <Button title="Skip" kind="ghost" feel="own" onPress={() => { fx.skip(); s.skipSlot(slot.id); }} style={{ height: 44 }} />
+                <Button title="Cook" onPress={() => cook(slot)} style={{ height: 44 }} />
+              </View>
+            ) : null}
+        </Card>
+      ))}
+    </Stage>
   );
 }
