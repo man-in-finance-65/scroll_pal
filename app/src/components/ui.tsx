@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { useEffect, useId, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View, type TextInputProps, type ViewStyle } from "react-native";
+import { useEffect, useId, useState, type ReactNode } from "react";
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View, type TextInputProps, type ViewStyle } from "react-native";
 import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Stop } from "react-native-svg";
@@ -43,9 +43,17 @@ export function Stage({
   const insets = useSafeAreaInsets();
   // Short phones get a smaller Pal so the content and the button still fit.
   const { height } = useWindowDimensions();
-  const pal = Math.round((palSize ?? 170) * (height < 700 ? 0.75 : 1));
+  // While the keyboard is up, Pal shrinks so the box you're typing in and the button stay in view above it.
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const show = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow", () => setTyping(true));
+    const hide = Keyboard.addListener(Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide", () => setTyping(false));
+    return () => { show.remove(); hide.remove(); };
+  }, []);
+  const pal = Math.round((palSize ?? 170) * (typing ? 0.5 : height < 700 ? 0.75 : 1));
   return (
-    <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
+    // iOS: the keyboard covers the screen, so push everything up by its height. Android already resizes the screen.
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
       <View style={[column, { height: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, gap: space.sm }]}>
         {/* Always shown when a step allows going back. Asking "can I go back?" while the screen is still appearing
             gave a stale "no" and hid the arrow, so the answer is checked on tap instead: back, or Home if nothing is behind. */}
@@ -67,8 +75,8 @@ export function Stage({
         </View>
         {children}
       </ScrollView>
-      {cta ? <View style={[column, { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: insets.bottom + space.md, gap: space.sm }]}>{cta}</View> : null}
-    </View>
+      {cta ? <View style={[column, { paddingHorizontal: space.md, paddingTop: space.sm, paddingBottom: (typing ? 0 : insets.bottom) + space.md, gap: space.sm }]}>{cta}</View> : null}
+    </KeyboardAvoidingView>
   );
 }
 
@@ -143,7 +151,7 @@ export function Field({ action, onAction, style, ...props }: TextInputProps & { 
   return (
     <View style={[{ flexDirection: "row", alignItems: "center", height: 56, backgroundColor: t.cardAlt, borderRadius: radius.md, paddingLeft: space.md, paddingRight: action ? 6 : space.md }, style as ViewStyle]}>
       {/* outlineStyle: browsers draw a square focus ring inside the rounded field; the field itself is the focus cue. */}
-      <TextInput placeholderTextColor={t.faint} {...props} style={[{ flex: 1, color: t.text, fontSize: 16, height: "100%" }, Platform.OS === "web" && ({ outlineStyle: "none" } as object)]} />
+      <TextInput placeholderTextColor={t.faint} selectionColor={t.tint} cursorColor={t.tint} {...props} style={[{ flex: 1, color: t.text, fontSize: 18, fontWeight: "600", height: "100%" }, Platform.OS === "web" && ({ outlineStyle: "none" } as object)]} />
       {action ? (
         <Pressable accessibilityRole="button" onPress={() => { fx.tap(); onAction?.(); }} style={{ height: 40, paddingHorizontal: space.md, borderRadius: radius.pill, backgroundColor: t.glow, justifyContent: "center" }}>
           <Text style={{ color: t.tint, fontWeight: "700" }}>{action}</Text>
