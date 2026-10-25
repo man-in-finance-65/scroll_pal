@@ -63,11 +63,70 @@ export function fillPlan(plan: Plan, recipes: Recipe[]): Plan {
   return { ...plan, slots, recipe: plan.recipe ?? recipes[0] };
 }
 
-// Every Instagram post or reel link in a "Download your information" file (JSON or HTML), newest first, no repeats.
+// Every Instagram post or reel link in a "Download your information" file (JSON or HTML), no repeats.
 export function instagramLinks(text: string): string[] {
   const found = text.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+/g) ?? [];
   const clean = found.map((u) => u.replace(/^http:/, "https:").replace("://instagram", "://www.instagram").replace("/reels/", "/reel/"));
   return [...new Set(clean)];
+}
+
+// A CSV file split into rows of cells. Handles quoted cells that hold commas, quotes and line breaks (captions do).
+function csvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], cell = "", quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (quoted) {
+      if (c === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+      else if (c === '"') quoted = false;
+      else cell += c;
+    } else if (c === '"') quoted = true;
+    else if (c === ",") { row.push(cell); cell = ""; }
+    else if (c === "\n" || c === "\r") {
+      if (c === "\r" && text[i + 1] === "\n") i++;
+      row.push(cell); cell = "";
+      if (row.some((x) => x !== "")) rows.push(row);
+      row = [];
+    } else cell += c;
+  }
+  row.push(cell);
+  if (row.some((x) => x !== "")) rows.push(row);
+  return rows;
+}
+
+const FOOD_WORDS = /recipe|cook|bake|baking|dinner|lunch|breakfast|meal|snack|dessert|ingredient|tbsp|tsp|cup|grams|protein|chicken|beef|pork|steak|salmon|fish|shrimp|egg|rice|pasta|noodle|soup|salad|bowl|cookie|cake|bread|pizza|burger|taco|sauce|dough|roast|fry|grill|air fryer|oven|vegan|healthy|kcal|calorie|macros|crispy|cheese|chocolate|oats|smoothie|yogurt/i;
+
+export type Save = { url: string; caption: string };
+
+// What to feed Pal from a saves file. Instagram's JSON export is just links. A CSV with columns like
+// creator, post_url, caption, bucket (some tools export saves this way) gets the food saves only, newest first,
+// each with its caption, so Pal can read the recipe even when Instagram won't show its page.
+export function instagramSaves(text: string): { saves: Save[]; total: number; kind: "csv" | "links" } {
+  const rows = csvRows(text);
+  const head = rows[0]?.map((h) => h.trim().toLowerCase()) ?? [];
+  const col = (name: string) => head.indexOf(name);
+  if (col("post_url") < 0) {
+    const links = instagramLinks(text);
+    return { saves: links.map((url) => ({ url, caption: "" })), total: links.length, kind: "links" };
+  }
+  const [u, c, b, d, h] = [col("post_url"), col("caption"), col("bucket"), col("posted_date"), col("hashtags")];
+  const all = rows.slice(1).filter((r) => /instagram\.com\//.test(r[u] ?? ""));
+  const caption = (r: Row) => (c >= 0 ? r[c] ?? "" : "");
+  type Row = string[];
+  // Food: the file's own food bucket when it has one (then double checked by the words in the caption), else the words alone.
+  const inBucket = b >= 0 ? all.filter((r) => /food|recipe|cook/i.test(r[b] ?? "")) : all;
+  const wordy = (r: Row) => FOOD_WORDS.test(`${caption(r)} ${h >= 0 ? r[h] ?? "" : ""}`);
+  let food = inBucket.filter(wordy);
+  if (!food.length) food = inBucket.length ? inBucket : all.filter(wordy);
+  food.sort((x, y) => (d >= 0 ? (y[d] ?? "").localeCompare(x[d] ?? "") : 0));
+  const seen = new Set<string>();
+  const saves = food.flatMap((r) => {
+    const url = r[u].trim().replace(/^http:/, "https:");
+    if (seen.has(url)) return [];
+    seen.add(url);
+    return [{ url, caption: caption(r).trim().slice(0, 1800) }];
+  });
+  return { saves, total: all.length, kind: "csv" };
 }
 
 // Does this meal, after Pal's swaps, really fit your goal? Decided by plain rules on the numbers (lib/goals.ts),
@@ -94,3 +153,4 @@ export function fitFor(recipe: Recipe, swaps: Swap[], goal: Goal, body: Body | n
   const limit = target ?? (goal === "cut" ? 550 : Infinity);
   return { level, verdict, misses, kcal, target, over: target !== null && kcal > target ? kcal - target : 0, halfFits: goal !== "bulk" && kcal > limit && Math.floor(kcal / 2) <= limit };
 }
+

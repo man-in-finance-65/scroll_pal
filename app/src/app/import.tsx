@@ -5,7 +5,7 @@ import { ActivityIndicator, Linking, Pressable, Text, View } from "react-native"
 import type { PalMood } from "../components/Pal";
 import { Button, Card, Stage } from "../components/ui";
 import { fx } from "../lib/fx";
-import { instagramLinks } from "../lib/meal";
+import { instagramSaves, type Save } from "../lib/meal";
 import { useStore } from "../lib/store";
 import { space, type, useTheme } from "../lib/theme";
 
@@ -19,14 +19,14 @@ const GUIDE: { say: string; title: string; detail: string; open?: boolean }[] = 
   { say: "Instagram keeps a file of everything you saved. Let's ask for it.", title: "Open Download your information", detail: "Instagram › Settings › Accounts Center › Your information and permissions › Download your information", open: true },
   { say: "Only the saves. I don't need anything else.", title: "Pick Some of your information", detail: "Download or transfer information › your account › Some of your information › tick Saved › Next" },
   { say: "Instagram emails you when it's ready. Usually minutes.", title: "Download to device", detail: "Date range: All time. Format: JSON. Then tap Create files." },
-  { say: "Last bit! Unzip it and hand me the saves file.", title: "Open the email and unzip", detail: "Download the zip, tap it to unzip. Inside: your_instagram_activity › saved › saved_posts.json" },
+  { say: "Last bit! Unzip it and hand me the saves file.", title: "Open the email and unzip", detail: "Download the zip, tap it to unzip. Inside: your_instagram_activity › saved › saved_posts.json. A saves CSV from another tool works too." },
 ];
 
 export default function Import() {
   const t = useTheme();
   const s = useStore();
   const [step, setStep] = useState(0);
-  const [links, setLinks] = useState<string[] | null>(null);
+  const [found, setFound] = useState<{ saves: Save[]; total: number; kind: "csv" | "links" } | null>(null);
   const [jobIds, setJobIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const jobs = s.jobs.filter((j) => jobIds.includes(j.id));
@@ -47,10 +47,10 @@ export default function Import() {
       if (/\.zip$/i.test(file.name)) return setError("That's the zip. Unzip it and pick saved_posts.json inside.");
       // Web gives a File; phones give a local file address that fetch can read.
       const text = file.file ? await file.file.text() : await (await fetch(file.uri)).text();
-      const found = instagramLinks(text);
-      if (!found.length) return setError("I couldn't find saved posts in that file. Pick saved_posts.json.");
+      const got = instagramSaves(text);
+      if (!got.saves.length) return setError(got.total ? "None of those saves look like food. Pick a file with recipes in it." : "I couldn't find saved posts in that file. Pick saved_posts.json or your saves CSV.");
       fx.ready();
-      setLinks(found);
+      setFound(got);
     } catch (e) {
       fx.error();
       setError(`I couldn't read that file. ${(e as Error).message}`);
@@ -58,11 +58,12 @@ export default function Import() {
   }
 
   // After the file: feed the posts, then show progress.
-  if (links) {
+  if (found) {
+    const links = found.saves;
     const mood: PalMood = jobIds.length && !chewing ? "cheer" : jobIds.length ? "fit" : "cheer";
     const say = jobIds.length
       ? (chewing ? `Chewing through your saves… ${done} of ${jobIds.length} done.` : `Done! ${done} new recipes for our week.`)
-      : `Found ${links.length} saved posts! I'll take the newest ${Math.min(want, links.length)}.`;
+      : found.kind === "csv" ? `${found.total} saves, and ${links.length} are food! I'll take the newest ${Math.min(want, links.length)}.` : `Found ${links.length} saved posts! I'll take the newest ${Math.min(want, links.length)}.`;
     return (
       <Stage
         mood={mood}
@@ -70,7 +71,7 @@ export default function Import() {
         palSize={140}
         cta={jobIds.length
           ? <Button title="See my week" disabled={chewing} onPress={() => router.dismissTo("/plan")} />
-          : <Button title={`Feed Pal ${Math.min(want, links.length)} posts`} onPress={() => setJobIds(links.slice(0, want).map((u) => s.digest(u)))} />}
+          : <Button title={`Feed Pal ${Math.min(want, links.length)} posts`} onPress={() => setJobIds(links.slice(0, want).map((x) => s.digest(x.url, x.caption || undefined)))} />}
       >
         {jobs.length ? (
           <Card style={{ gap: 0 }}>
