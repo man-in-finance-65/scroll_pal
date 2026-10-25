@@ -59,9 +59,9 @@ export function Celebration() {
   };
 
   return (
-    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(9,10,15,0.8)", justifyContent: "center", padding: space.lg }, bg]}>
+    <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "rgba(9,10,15,0.8)", justifyContent: "center", alignItems: "center", padding: space.lg, overflow: "hidden" }, bg]}>
       <Pressable style={StyleSheet.absoluteFill} onPress={close} />
-      <Animated.View style={[{ backgroundColor: t.card, borderRadius: radius.md, padding: space.xl, alignItems: "center", gap: space.md }, card]}>
+      <Animated.View style={[{ width: "100%", maxWidth: 440, backgroundColor: t.card, borderRadius: radius.md, padding: space.xl, alignItems: "center", gap: space.md }, card]}>
         {c.kind === "level" ? (
           <>
             <Pal mood="cheer" size={170} />

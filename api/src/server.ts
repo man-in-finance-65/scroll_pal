@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { buildPlan, planPrompt } from "./claude.js";
 import { planWithGemini } from "./gemini.js";
 import { IngestError, ingest } from "./ingest.js";
-import { instacartLink, KitchenError, readPantry, swapsFor } from "./kitchen.js";
+import { KitchenError, readPantry, swapsFor } from "./kitchen.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
-import { EventBody, FeedbackBody, IngestBody, InstacartBody, PalBody, PantryBody, PlanBody, SwapsBody } from "./schema.js";
+import { EventBody, FeedbackBody, IngestBody, PalBody, PantryBody, PlanBody, SwapsBody } from "./schema.js";
 import { sheetTime, toSheet } from "./sheet.js";
 
 const app = express();
@@ -105,19 +105,6 @@ app.post("/v1/pantry", limit(30), async (req: Request, res: Response) => {
     res.json({ have: await readPantry(body.data.image, body.data.mimeType, body.data.ingredients) });
   } catch (e) {
     kitchenFail(res, e, "pantry");
-  }
-});
-
-// The missing items as an Instacart shopping page (or a search page until the Instacart key is set).
-app.post("/v1/instacart", limit(30), async (req: Request, res: Response) => {
-  const body = InstacartBody.safeParse(req.body);
-  if (!body.success) return bad(res, "Send {title, items[]}.");
-  try {
-    const out = await instacartLink(body.data.title, body.data.items);
-    console.log(`EVENT type=instacart fallback=${out.fallback} items=${body.data.items.length}`);
-    res.json(out);
-  } catch (e) {
-    kitchenFail(res, e, "instacart");
   }
 });
 

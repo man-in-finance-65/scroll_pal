@@ -102,8 +102,3 @@ export const PantryBody = z.object({
   mimeType: z.string().regex(/^image\//),
   ingredients: z.array(z.string()).min(1).max(60),
 });
-
-export const InstacartBody = z.object({
-  title: z.string().max(120),
-  items: z.array(z.object({ name: z.string(), qty: z.number().nullable(), unit: z.string() })).min(1).max(60),
-});

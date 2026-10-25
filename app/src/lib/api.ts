@@ -39,9 +39,6 @@ export const api = {
   // A photo of your shelves: which of the recipe's ingredients Pal can see.
   pantry: (imageBase64: string, mimeType: string, ingredients: string[]) =>
     post<{ have: string[] }>("/v1/pantry", { image: imageBase64, mimeType, ingredients }, 90_000),
-  // Turns the missing items into an Instacart shopping page. fallback = no Instacart key yet, so it's a search page.
-  instacart: (title: string, items: { name: string; qty: number | null; unit: string }[]) =>
-    post<{ url: string; fallback: boolean }>("/v1/instacart", { title, items }, 30_000),
   // One row per answer in the team sheet. Anonymous: a random device id, no name, no email.
   feedback: (body: { device: string; milestone: number; level: number; cooks: number; id: string; q: string; a: string }) =>
     post<void>("/v1/feedback", body, 15_000),

@@ -77,8 +77,10 @@ function Week() {
       palSize={120}
       cta={
         <>
-          {empty ? <Button title="Fill from Instagram" onPress={() => router.push("/import")} /> : null}
-          <Button title="Feed me a link" kind={empty ? "ghost" : "secondary"} onPress={() => router.push("/meal/feed")} />
+          {empty ? <Button title="Fill from Instagram" onPress={() => router.push("/import")} /> : <Button title="Feed me a link" kind="secondary" onPress={() => router.push("/meal/feed")} />}
+          {empty
+            ? <Button title="Feed me a link" kind="ghost" onPress={() => router.push("/meal/feed")} />
+            : <Button title="Import my Instagram saves" kind="ghost" onPress={() => router.push("/import")} />}
         </>
       }
     >

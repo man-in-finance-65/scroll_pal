@@ -61,7 +61,7 @@ export type Meal = {
   recipe: Recipe;
   swaps: Swap[];
   have: string[]; // ingredient names you already have
-  orderUrl?: string;
+  orderUrl?: string; // the store cart you shopped in, to reopen it while you wait
   stage: MealStage;
   slotId?: string; // the plan slot this meal fills, if any
   cookedAt?: string;

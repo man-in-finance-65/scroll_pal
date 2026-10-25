@@ -12,7 +12,7 @@ Expo (React Native) app plus a tiny Node/TS API. Pal, a mascot companion, turns 
 - Pal is only ever one of the 6 Stitch images in app/assets/pal (sick, cheeky, cheer, chubby, fit, worried). Never redraw or restyle Pal.
 - Look: one dark theme from the Stitch "ScrollPal Dark" design system (lib/theme.ts). Copy is Pal speaking in first person; no hyphens or dashes.
 - Photos and files: expo-image-picker (pantry photo) and expo-document-picker (Instagram saves export), added with the owner's OK, 2026-10-25.
-- Instacart: official Developer Platform API (INSTACART_API_KEY); without a key Pal opens an Instacart search instead.
+- Shopping: Walmart app links (search per missing item, then the cart). No API or key: Walmart, DoorDash and Costco have no public cart API, and the Instacart API was not reachable (owner, 2026-10-25).
 - Animation: react-native-reanimated springs. Rings: react-native-svg. Haptics: expo-haptics.
 
 ## Rules

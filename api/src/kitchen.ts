@@ -1,4 +1,4 @@
-// The kitchen half of Pal: goal swaps, reading a pantry photo, and sending the missing items to Instacart.
+// The kitchen half of Pal: goal swaps and reading a pantry photo.
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { GoogleGenAI } from "@google/genai";
@@ -136,38 +136,4 @@ export async function readPantry(image: string, mimeType: string, ingredients: s
   } catch (e) {
     throw new KitchenError(502, "pantry_failed", "I couldn't make out that photo. Try a brighter one, or tick what you have.", clean(e));
   }
-}
-
-// ---------- Instacart ----------
-
-// "Order on Instacart": Instacart's official Developer Platform API turns the list into a shopping page.
-// The user signs in and pays on Instacart's own page; Pal never sees that login.
-// Without a key there is still a real path: an Instacart search page for the items.
-export async function instacartLink(title: string, items: { name: string; qty: number | null; unit: string }[]): Promise<{ url: string; fallback: boolean }> {
-  const key = process.env.INSTACART_API_KEY;
-  if (!key) {
-    return { url: `https://www.instacart.com/store/s?k=${encodeURIComponent(items.map((i) => i.name).join(", "))}`, fallback: true };
-  }
-  const base = process.env.INSTACART_BASE_URL || "https://connect.instacart.com";
-  const res = await fetch(`${base}/idp/v1/products/products_link`, {
-    method: "POST",
-    headers: { "content-type": "application/json", accept: "application/json", authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      title,
-      link_type: "shopping_list",
-      line_items: items.map((i) => ({
-        name: i.name,
-        display_text: i.qty ? `${i.qty} ${i.unit} ${i.name}`.replace(/\s+/g, " ").trim() : i.name,
-        ...(i.qty ? { line_item_measurements: [{ quantity: i.qty, unit: i.unit || "each" }] } : {}),
-      })),
-    }),
-    signal: AbortSignal.timeout(20_000),
-  }).catch((e) => {
-    throw new KitchenError(502, "instacart_unreachable", "I can't reach Instacart right now. Try again in a minute.", clean(e));
-  });
-  const json = (await res.json().catch(() => ({}))) as { products_link_url?: string; error?: { message?: string } };
-  if (!res.ok || !json.products_link_url) {
-    throw new KitchenError(502, "instacart_failed", "Instacart didn't take the list just now. Try again in a minute.", `HTTP ${res.status} ${json.error?.message ?? ""}`.trim());
-  }
-  return { url: json.products_link_url, fallback: false };
 }

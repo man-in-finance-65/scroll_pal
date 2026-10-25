@@ -1,71 +1,78 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Linking, Pressable, Text } from "react-native";
+import { Pressable, Text } from "react-native";
 import { Button, Card, NoMeal, Row, Stage } from "../../components/ui";
-import { api, ApiError } from "../../lib/api";
 import { est, qtyText } from "../../lib/format";
 import { fx } from "../../lib/fx";
 import { shopName, swappedIngredients } from "../../lib/meal";
 import { useStore } from "../../lib/store";
-import { type, useTheme } from "../../lib/theme";
+import { brand, type, useTheme } from "../../lib/theme";
+import { openWalmart, walmartCartUrl, walmartSearchUrl } from "../../lib/walmart";
 
-// Step 4 of a meal: the missing ingredients go to Instacart in one tap. You sign in and pay on Instacart's own page.
+// Step 4 of a meal: get the missing ingredients at Walmart. One tap per item opens it in the Walmart app,
+// you add it to your cart there, and Pal ticks it off. You check out on Walmart's side; Pal never sees that login.
 export default function Shop() {
   const t = useTheme();
   const s = useStore();
   const meal = s.meal;
-  const [busy, setBusy] = useState(false);
+  const [found, setFound] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   if (!meal) return <NoMeal />;
 
   const names = swappedIngredients(meal.recipe, meal.swaps);
   const have = new Set(meal.have);
   const missing = meal.recipe.ingredients.map((ing, i) => ({ ...ing, name: names[i], swapped: names[i] !== ing.name })).filter((i) => !have.has(i.name));
+  const next = missing.find((i) => !found.includes(i.name));
 
-  async function order() {
-    setBusy(true);
+  async function find(name: string) {
     setError(null);
     try {
-      // Swapped items don't carry the video's amount, so Instacart gets just the name for those.
-      const items = missing.map((i) => ({ name: shopName(i.name), qty: i.swapped ? null : i.qty, unit: i.swapped ? "" : i.unit }));
-      const { url } = await api.instacart(meal!.recipe.title, items);
-      s.setOrderUrl(url);
-      await Linking.openURL(url);
-      s.setStage("wait");
-      router.push("/meal/wait");
+      await openWalmart(walmartSearchUrl(shopName(name)));
+      setFound((f) => (f.includes(name) ? f : [...f, name]));
     } catch (e) {
       fx.error();
-      setError((e as ApiError).message ?? "I couldn't open Instacart.");
-    } finally {
-      setBusy(false);
+      setError((e as Error).message);
     }
   }
 
-  const search = (name: string) => Linking.openURL(`https://www.instacart.com/store/s?k=${encodeURIComponent(name)}`).catch(() => {});
+  function done() {
+    if (found.length) s.setOrderUrl(walmartCartUrl()); // so the wait screen can reopen the cart
+    s.setStage("wait");
+    router.push("/meal/wait");
+  }
+
+  const say = error ?? (
+    !found.length ? (have.size ? `We have ${have.size}! Just need ${missing.length} more. Let's grab them at Walmart.` : `We need ${missing.length} things. Let's grab them at Walmart.`)
+    : next ? `${found.length} of ${missing.length} in the cart. Next up: ${shopName(next.name)}.`
+    : "All in the cart! Check out in Walmart, then come back."
+  );
 
   return (
     <Stage
-      mood={error ? "worried" : "cheeky"}
-      say={error ?? (have.size ? `We have ${have.size}! Just need ${missing.length} more. I'll order them.` : `We need ${missing.length} things. I'll order them.`)}
+      mood={error ? "worried" : next ? "cheeky" : "cheer"}
+      say={say}
       step={[4, 6]}
       palSize={130}
       cta={
         <>
-          <Button title="Order on Instacart" icon="🛒" loading={busy} onPress={order} />
-          <Button title="I'll shop myself" kind="ghost" onPress={() => { s.setStage("wait"); router.push("/meal/wait"); }} />
+          {next
+            ? <Button title={`Find ${shopName(next.name)} at Walmart`} icon="🛒" onPress={() => find(next.name)} />
+            : <Button title="I checked out" onPress={done} />}
+          <Button title={found.length ? "Skip the rest" : "I'll shop myself"} kind="ghost" onPress={done} />
         </>
       }
     >
       <Card>
-        {missing.map((i, k) => (
-          <Pressable key={i.name + k} onPress={() => { fx.tap(); search(shopName(i.name)); }} accessibilityRole="link" accessibilityLabel={`Search ${i.name} on Instacart`}>
-            <Row first={k === 0} left={i.name} right={i.swapped ? "" : `${est(i.source)}${qtyText(i.qty, i.unit)}`} />
-          </Pressable>
-        ))}
+        {missing.map((i, k) => {
+          const got = found.includes(i.name);
+          return (
+            <Pressable key={i.name + k} onPress={() => { fx.tap(); find(i.name); }} accessibilityRole="link" accessibilityLabel={`Find ${i.name} at Walmart`}>
+              <Row first={k === 0} left={`${got ? "✓ " : ""}${i.name}`} color={got ? brand.mint : undefined} right={i.swapped ? "" : `${est(i.source)}${qtyText(i.qty, i.unit)}`} />
+            </Pressable>
+          );
+        })}
       </Card>
-      <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>
-        Tap an item to search it on Instacart.
-      </Text>
+      <Text style={[type.caption, { color: t.faint, textAlign: "center" }]}>Tap any item to find it in the Walmart app.</Text>
     </Stage>
   );
 }
