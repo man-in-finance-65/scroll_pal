@@ -1,4 +1,5 @@
 import { num } from "./format";
+import { judge, type Verdict } from "./goals";
 import type { Body, Goal, Pact, Plan, PlanSlot, Recipe, Swap } from "./types";
 import { localDay } from "./xp";
 
@@ -67,4 +68,29 @@ export function instagramLinks(text: string): string[] {
   const found = text.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[A-Za-z0-9_.]+\/)?(?:p|reel|reels|tv)\/[A-Za-z0-9_-]+/g) ?? [];
   const clean = found.map((u) => u.replace(/^http:/, "https:").replace("://instagram", "://www.instagram").replace("/reels/", "/reel/"));
   return [...new Set(clean)];
+}
+
+// Does this meal, after Pal's swaps, really fit your goal? Decided by plain rules on the numbers (lib/goals.ts),
+// never by the AI, so a s'mores cookie can't get a pass. The meal target from your body is one more check.
+//   good = every check passes, close = one misses, off = two or more miss.
+export type Fit = { level: "good" | "close" | "off"; verdict: Verdict; misses: string[]; kcal: number; target: number | null; over: number; halfFits: boolean };
+
+export function fitFor(recipe: Recipe, swaps: Swap[], goal: Goal, body: Body | null): Fit {
+  const kcal = kcalAfterSwaps(recipe, swaps);
+  const after: Recipe = { ...recipe, macros_per_serving: { ...recipe.macros_per_serving, kcal } };
+  const verdict = judge(after, goal);
+  const aim = mealTarget(body, goal);
+  const target = aim?.perMeal ?? null;
+  if (target !== null) {
+    // Cut or maintain: stay at or under your target. Bulk: don't fall far short of it.
+    const pass = goal === "bulk" ? kcal >= target * 0.8 : kcal <= target;
+    const math = goal === "bulk" ? `${num(kcal, 0)} kcal vs at least ${num(target * 0.8, 0)}` : `${num(kcal, 0)} kcal vs your ${target} per meal`;
+    verdict.rows.push({ label: "Your meal target", rule: "Fits the meal size I worked out for you", pass, math });
+    verdict.total++;
+    if (pass) verdict.passed++;
+  }
+  const misses = verdict.rows.filter((r) => !r.pass).map((r) => `${r.label}: ${r.math}`);
+  const level = misses.length === 0 ? "good" : misses.length === 1 ? "close" : "off";
+  const limit = target ?? (goal === "cut" ? 550 : Infinity);
+  return { level, verdict, misses, kcal, target, over: target !== null && kcal > target ? kcal - target : 0, halfFits: goal !== "bulk" && kcal > limit && Math.floor(kcal / 2) <= limit };
 }

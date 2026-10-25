@@ -4,7 +4,7 @@ import { Text, View } from "react-native";
 import { Button, Card, Choice, NumberCard, Stage } from "../../components/ui";
 import { est, num } from "../../lib/format";
 import { fx } from "../../lib/fx";
-import { kcalAfterSwaps } from "../../lib/meal";
+import { fitFor } from "../../lib/meal";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
 import { EAT_XP } from "../../lib/xp";
@@ -30,15 +30,24 @@ export default function Eat() {
   }
 
   if (eaten) {
+    // Pal is honest: a meal that didn't fit the goal is a treat, not a step toward it. The XP still counts.
+    const m = !log ? s.meal : null;
+    const treat = m ? fitFor(m.recipe, m.swaps, s.goal, s.body).level === "off" : false;
     return (
-      <Stage mood="cheer" say={`Mmm. ${GROW[s.goal]} +${EAT_XP} XP`} back={false} palSize={200} cta={<Button title="Back home" onPress={() => router.dismissTo("/")} />} />
+      <Stage
+        mood={treat ? "chubby" : "cheer"}
+        say={treat ? `Mmm, a treat! Tomorrow we go lighter. +${EAT_XP} XP` : `Mmm. ${GROW[s.goal]} +${EAT_XP} XP`}
+        back={false}
+        palSize={200}
+        cta={<Button title="Back home" onPress={() => router.dismissTo("/")} />}
+      />
     );
   }
 
   if (pending) {
     const r = pending.recipe;
     const m = r.macros_per_serving;
-    const kcal = kcalAfterSwaps(r, pending.swaps);
+    const kcal = fitFor(r, pending.swaps, s.goal, s.body).kcal;
     return (
       <Stage mood="cheer" say="We cooked it! Plate it up and tell me when it's in your belly." step={[6, 6]} back={false} palSize={150} cta={<Button title="I ate it" feel="own" onPress={eat} />}>
         <Card>

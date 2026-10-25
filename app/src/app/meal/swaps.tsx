@@ -1,14 +1,16 @@
 import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
-import { Button, Card, NoMeal, Stage } from "../../components/ui";
+import type { PalMood } from "../../components/Pal";
+import { Button, Card, NoMeal, Row, Stage } from "../../components/ui";
 import { api, ApiError } from "../../lib/api";
 import { est, num } from "../../lib/format";
-import { kcalAfterSwaps, mealTarget } from "../../lib/meal";
+import { fitFor, mealTarget } from "../../lib/meal";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
 
-// Step 2 of a meal: Pal tunes the recipe to your goal with a few ingredient swaps, and shows the maths.
+// Step 2 of a meal: Pal tunes the recipe to your goal with a few ingredient swaps, then tells you the truth about
+// whether it fits. The verdict comes from plain rules on the numbers (lib/goals.ts), never from the AI.
 export default function Swaps() {
   const t = useTheme();
   const s = useStore();
@@ -28,20 +30,50 @@ export default function Swaps() {
   if (!meal) return <NoMeal />;
   const r = meal.recipe;
   const m = r.macros_per_serving;
-  const after = kcalAfterSwaps(r, meal.swaps);
-  const saved = m.kcal - after;
-  const say = loading ? "Tuning it to your goal…"
-    : error ? error
-    : meal.swaps.length ? `I tuned ${r.title} to your goal.`
-    : `${r.title} already fits you. No swaps needed.`;
+  const fit = fitFor(r, meal.swaps, s.goal, s.body);
+  const saved = m.kcal - fit.kcal;
+  const goalWord = { cut: "losing weight", bulk: "building muscle", maintain: "eating healthier" }[s.goal];
+
+  let mood: PalMood;
+  let say: string;
+  if (loading) { mood = "fit"; say = "Tuning it to your goal…"; }
+  else if (fit.level === "good") {
+    mood = "cheer";
+    say = meal.swaps.length ? `I tuned ${r.title}. Now it fits our goal!` : `${r.title} already fits our goal. Let's cook it!`;
+  } else if (fit.level === "close") {
+    mood = "cheeky";
+    say = `Close! One thing is off. ${fit.misses[0]}.`;
+  } else {
+    mood = "worried";
+    say = `Honest talk: ${r.title} works against ${goalWord}. ${
+      fit.target !== null && fit.over > 0 ? `That's ~${num(fit.kcal, 0)} kcal, ${num(fit.over, 0)} over our ${fit.target} per meal.` : fit.misses[0] + "."
+    }`;
+  }
+  if (error && !loading) say = `${error} ${say}`;
+
+  const goPantry = () => { s.setStage("pantry"); router.push("/meal/pantry"); };
+  const lighter = () => router.replace("/meal/feed");
 
   return (
     <Stage
-      mood={loading ? "fit" : error ? "worried" : "cheer"}
+      mood={mood}
       say={say}
       step={[2, 6]}
       palSize={130}
-      cta={<Button title="Check my pantry" disabled={loading} onPress={() => { s.setStage("pantry"); router.push("/meal/pantry"); }} />}
+      cta={
+        loading ? <Button title="Tuning…" disabled onPress={goPantry} />
+        : fit.level === "off" ? (
+          <>
+            <Button title="Find a lighter one" onPress={lighter} />
+            <Button title="Cook it as a treat" kind="ghost" onPress={goPantry} />
+          </>
+        ) : (
+          <>
+            <Button title="Check my pantry" onPress={goPantry} />
+            {fit.level === "close" ? <Button title="Find a lighter one" kind="ghost" onPress={lighter} /> : null}
+          </>
+        )
+      }
     >
       {!loading && (
         <>
@@ -53,15 +85,29 @@ export default function Swaps() {
                 <Text style={[type.bigNumber, { color: t.sub }]}>{est(m.source)}{num(m.kcal, 0)}</Text>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={[type.caption, { color: brand.mint }]}>My version</Text>
-                <Text style={[type.bigNumber, { color: brand.mint }]}>~{num(after, 0)}</Text>
+                <Text style={[type.caption, { color: fit.level === "off" ? t.danger : brand.mint }]}>My version</Text>
+                <Text style={[type.bigNumber, { color: fit.level === "off" ? t.danger : brand.mint }]}>~{num(fit.kcal, 0)}</Text>
               </View>
             </View>
             <Text style={[type.caption, { color: t.sub }]}>
-              {meal.swaps.length ? `${num(m.kcal, 0)} kcal ${saved >= 0 ? "minus" : "plus"} ${num(Math.abs(saved), 0)} from swaps = ${num(after, 0)} kcal` : `${num(m.kcal, 0)} kcal, ${num(m.protein_g)} g protein`}
+              {meal.swaps.length ? `${num(m.kcal, 0)} kcal ${saved >= 0 ? "minus" : "plus"} ${num(Math.abs(saved), 0)} from swaps = ${num(fit.kcal, 0)} kcal` : `${num(m.kcal, 0)} kcal, ${num(m.protein_g)} g protein`}
               {aim ? `. Your target: ~${aim.perMeal} per meal.` : ""}
             </Text>
+            {fit.level === "off" && fit.halfFits ? (
+              <Text style={[type.caption, { color: brand.mint, fontWeight: "700" }]}>
+                Half a serving is ~{num(fit.kcal / 2, 0)} kcal, and that fits us.
+              </Text>
+            ) : null}
           </Card>
+
+          <Card>
+            <Text style={[type.label, { color: t.sub }]}>How it fits our goal · {fit.verdict.passed} of {fit.verdict.total}</Text>
+            {fit.verdict.rows.map((row, k) => (
+              <Row key={row.label} first={k === 0} left={`${row.pass ? "✓" : "✗"} ${row.label}`} sub={row.math} color={row.pass ? brand.mint : t.danger} />
+            ))}
+            {fit.verdict.estimated ? <Text style={[type.caption, { color: t.faint }]}>~ means I estimated the numbers.</Text> : null}
+          </Card>
+
           {meal.swaps.map((sw) => (
             <Card key={sw.from}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", gap: space.sm }}>
