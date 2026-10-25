@@ -10,7 +10,7 @@ export function AdviceButton() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const path = usePathname();
-  if (path.startsWith("/feedback")) return null;
+  if (path.startsWith("/feedback") || path.startsWith("/demo")) return null; // /demo is the recording take: nothing floating on top
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", right: 10, bottom: insets.bottom + 96 }}>
       <Pressable

@@ -41,7 +41,7 @@ export default function PalHome() {
   return (
     <Screen>
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={[type.title, { color: t.text }]}>Pal</Text>
+        <Pressable onLongPress={() => router.push("/demo")} delayLongPress={800}><Text style={[type.title, { color: t.text }]}>Pal</Text></Pressable>
         <View style={{ flexDirection: "row", gap: 8 }}>
           <Pill text={pal.mood.label} color={pal.slow ? t.sub : brand.mint} />
           <Pill text={`Lv.${p.level}`} color={brand.violet} />
