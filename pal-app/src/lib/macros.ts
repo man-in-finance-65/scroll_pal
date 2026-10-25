@@ -44,3 +44,11 @@ const sign = (n: number) => (n > 0 ? "+" : n < 0 ? "-" : "");
 export const badgeText = (key: MacroKey, delta: number) =>
   key === "calories" ? `${sign(delta)}${Math.abs(delta)} kcal` : `${sign(delta)}${Math.abs(delta)}g ${LABEL[key]}`;
 export const amount = (key: MacroKey, n: number) => (key === "calories" ? `${n} kcal` : `${n}g`);
+
+/** "↑120%" / "↓35%" against the original, truncated (never rounded up). Empty when the original is 0. */
+export function percent(delta: number, original: number): string {
+  if (!original || !delta) return "";
+  const p = Math.trunc((Math.abs(delta) / original) * 100);
+  return ` (${delta > 0 ? "↑" : "↓"}${p}%)`;
+}
+export { trunc1 };

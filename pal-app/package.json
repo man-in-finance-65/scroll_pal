@@ -5,7 +5,8 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import ../pal-server/node_modules/tsx/dist/esm/index.mjs --test test/*.test.mts"
   },
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
