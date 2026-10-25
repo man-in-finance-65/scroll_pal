@@ -78,6 +78,13 @@ export default function Cook() {
           <Button title={left === null ? `Start ${mins} min timer` : left === 0 ? "Restart timer" : "Stop timer"} kind="secondary" onPress={() => setLeft(left === null || left === 0 ? mins * 60 : null)} style={{ alignSelf: "stretch" }} />
         </Card>
       ) : null}
+      {i === 0 && meal.tweak ? (
+        <Card>
+          <Text style={[type.label, { color: t.tint }]}>Your pick</Text>
+          <Text style={[type.h2, { color: t.text }]}>{meal.tweak.title}</Text>
+          <Text style={[type.caption, { color: t.sub }]}>{meal.tweak.how}</Text>
+        </Card>
+      ) : null}
       {i === 0 && swaps.length ? (
         <Text style={[type.caption, { color: t.sub, textAlign: "center" }]}>My swaps: {swaps.map((x) => `${x.to} for ${x.from}`).join(", ")}.</Text>
       ) : null}

@@ -3,7 +3,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
-import { type Recipe, Swap } from "./schema.js";
+import { Recommendation, type Recipe, Swap } from "./schema.js";
 
 type Goal = "bulk" | "cut" | "maintain";
 type SwapT = z.infer<typeof Swap>;
@@ -136,4 +136,83 @@ export async function readPantry(image: string, mimeType: string, ingredients: s
   } catch (e) {
     throw new KitchenError(502, "pantry_failed", "I couldn't make out that photo. Try a brighter one, or tick what you have.", clean(e));
   }
+}
+
+// ---------- Recommendations (the dish does not fit the goal) ----------
+
+type Rec = z.infer<typeof Recommendation>;
+const RecList = z.object({ recommendations: z.array(Recommendation).max(3) });
+
+function recPrompt(recipe: Recipe, goal: Goal, mealKcal: number | null, kcalAfter: number, misses: string[]) {
+  const aim = goal === "cut" ? "lose weight" : goal === "bulk" ? "build muscle" : "eat healthier";
+  return (
+    `The user wants to ${aim}. This dish does not fit: ${recipe.title}, about ${Math.floor(kcalAfter)} kcal per serving ` +
+    `(${recipe.macros_per_serving.protein_g} g protein, ${recipe.macros_per_serving.fat_g} g fat).` +
+    (mealKcal ? ` Their target is about ${mealKcal} kcal per meal.` : "") +
+    `\nWhat it misses: ${misses.join("; ")}.\nIngredients: ${recipe.ingredients.map((i) => i.name).join(", ")}.\n` +
+    `Give exactly 3 concrete recommendations, kind and honest, never preachy:\n` +
+    `1) a lighter version of THIS dish that keeps what makes it good (name the real changes),\n` +
+    `2) a portion or side tweak (how much to eat, what to pair it with),\n` +
+    `3) a different dish that satisfies the same craving and fits the goal.\n` +
+    `Each: title under 40 characters, how under 110 characters, kcal = estimated kcal per serving if they do it (a number), source "estimated". ` +
+    `Never use hyphens or dashes in any text.`
+  );
+}
+
+// Plain rules for when no AI is set up. Built from what the dish actually misses, so it is never generic filler.
+export function ruleRecs(recipe: Recipe, goal: Goal, mealKcal: number | null, kcalAfter: number): Rec[] {
+  const m = recipe.macros_per_serving;
+  const out: Rec[] = [];
+  const limit = mealKcal ?? (goal === "cut" ? 550 : null);
+  if (goal !== "bulk" && limit && kcalAfter > limit) {
+    const share = Math.max(0.25, Math.floor((limit / kcalAfter) * 4) / 4); // a quarter, half or three quarters of a serving
+    out.push({ title: share >= 0.75 ? "Eat a little less" : share >= 0.5 ? "Eat half a serving" : "Share it", how: `About ${Math.round(share * 100)} percent of a serving fits our target. Save the rest for another day.`, kcal: Math.floor(kcalAfter * share), source: "estimated" });
+  }
+  if (goal !== "bulk" && m.fat_g > 20) {
+    out.push({ title: "Go lighter on the fat", how: "Use half the butter, oil or cheese, and bake, grill or air fry instead of frying.", kcal: Math.max(0, Math.floor(kcalAfter - m.fat_g * 4.5)), source: "estimated" });
+  }
+  if (m.protein_g < (goal === "bulk" ? 35 : 30)) {
+    // Over the limit already: adding food would make it worse, so only pair it with a smaller portion and don't promise a number.
+    const over = !!limit && goal !== "bulk" && kcalAfter > limit;
+    out.push({ title: "Add a protein", how: over ? "With a smaller portion, pair it with Greek yogurt or an egg to keep you full." : "Pair it with Greek yogurt, an egg or some chicken on the side.", kcal: over ? null : Math.floor(kcalAfter + 100), source: "estimated" });
+  }
+  out.push({ title: "Keep it for a treat day", how: "Cook it once in a while, and make our other meals lighter that day.", kcal: null, source: "estimated" });
+  return out.slice(0, 3);
+}
+
+export async function recommendFor(recipe: Recipe, goal: Goal, mealKcal: number | null, kcalAfter: number, misses: string[]): Promise<{ recommendations: Rec[]; planner: string; note?: string }> {
+  if (mock()) {
+    await sleep(500);
+    return { recommendations: ruleRecs(recipe, goal, mealKcal, kcalAfter), planner: "mock" };
+  }
+  const tried: string[] = [];
+  const prompt = recPrompt(recipe, goal, mealKcal, kcalAfter, misses);
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const msg = await (anthropic ??= new Anthropic()).messages.parse({
+        model: process.env.CLAUDE_MODEL || "claude-haiku-5-5",
+        max_tokens: 900,
+        system: "You are Pal, a friendly cooking companion who wants the user to reach their goal. Be practical, kind and brief.",
+        messages: [{ role: "user", content: prompt }],
+        output_config: { format: zodOutputFormat(RecList) },
+      });
+      if (msg.parsed_output?.recommendations.length) return { recommendations: msg.parsed_output.recommendations, planner: "claude" };
+    } catch (e) {
+      tried.push(`claude: ${clean(e)}`);
+    }
+  }
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const res = await geminiClient().models.generateContent({
+        model: process.env.GEMINI_MODEL || "gemini-flash-latest",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { responseMimeType: "application/json", responseJsonSchema: geminiSchema(RecList), temperature: 0.6, abortSignal: AbortSignal.timeout(30_000) },
+      });
+      const list = res.text ? RecList.parse(JSON.parse(res.text)).recommendations : [];
+      if (list.length) return { recommendations: list, planner: "gemini" };
+    } catch (e) {
+      tried.push(`gemini: ${clean(e)}`);
+    }
+  }
+  return { recommendations: ruleRecs(recipe, goal, mealKcal, kcalAfter), planner: "built-in", note: tried.join(" | ") || undefined };
 }

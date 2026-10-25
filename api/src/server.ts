@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { buildPlan, planPrompt } from "./claude.js";
 import { planWithGemini } from "./gemini.js";
 import { IngestError, ingest } from "./ingest.js";
-import { KitchenError, readPantry, swapsFor } from "./kitchen.js";
+import { KitchenError, readPantry, recommendFor, swapsFor } from "./kitchen.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
-import { EventBody, FeedbackBody, IngestBody, PalBody, PantryBody, PlanBody, SwapsBody } from "./schema.js";
+import { EventBody, FeedbackBody, IngestBody, PalBody, PantryBody, PlanBody, RecommendBody, SwapsBody } from "./schema.js";
 import { sheetTime, toSheet } from "./sheet.js";
 
 const app = express();
@@ -94,6 +94,19 @@ app.post("/v1/swaps", limit(60), async (req: Request, res: Response) => {
     res.json(out);
   } catch (e) {
     kitchenFail(res, e, "swaps");
+  }
+});
+
+// The dish does not fit the goal: Pal recommends what to do about it. Never fails: plain rules answer without AI.
+app.post("/v1/recommend", limit(60), async (req: Request, res: Response) => {
+  const body = RecommendBody.safeParse(req.body);
+  if (!body.success) return bad(res, "Send {recipe, goal, kcalAfter, misses[], mealKcal?}.");
+  try {
+    const out = await recommendFor(body.data.recipe, body.data.goal, body.data.mealKcal ?? null, body.data.kcalAfter, body.data.misses);
+    if (out.note) console.warn(`recommend: ${out.planner} used. ${out.note}`);
+    res.json(out);
+  } catch (e) {
+    kitchenFail(res, e, "recommend");
   }
 });
 

@@ -2,12 +2,13 @@ import { router } from "expo-router";
 import { useEffect, useState } from "react";
 import { Text, View } from "react-native";
 import type { PalMood } from "../../components/Pal";
-import { Button, Card, NoMeal, Row, Stage } from "../../components/ui";
+import { Button, Card, Choice, NoMeal, Row, Stage } from "../../components/ui";
 import { api, ApiError } from "../../lib/api";
-import { est, num } from "../../lib/format";
+import { est, num, plain } from "../../lib/format";
 import { fitFor, mealTarget } from "../../lib/meal";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
+import type { Recommendation } from "../../lib/types";
 
 // Step 2 of a meal: Pal tunes the recipe to your goal with a few ingredient swaps, then tells you the truth about
 // whether it fits. The verdict comes from plain rules on the numbers (lib/goals.ts), never from the AI.
@@ -27,6 +28,18 @@ export default function Swaps() {
     );
   }, [meal?.id]);
 
+  // Not a fit: Pal recommends what to do about it. Asked once per dish, after the swaps are in.
+  const [recs, setRecs] = useState<{ id: string; list: Recommendation[] } | null>(null);
+  const fitNow = meal ? fitFor(meal.recipe, meal.swaps, s.goal, s.body) : null;
+  const needsRecs = !!meal && !loading && fitNow!.level !== "good";
+  useEffect(() => {
+    if (!needsRecs || !meal || recs?.id === meal.id) return;
+    api.recommend(meal.recipe, s.goal, aim?.perMeal ?? null, fitNow!.kcal, fitNow!.misses).then(
+      (r) => setRecs({ id: meal.id, list: r.recommendations.map((x) => ({ ...x, title: plain(x.title), how: plain(x.how) })) }),
+      () => setRecs({ id: meal.id, list: [] }),
+    );
+  }, [needsRecs, meal?.id]);
+
   if (!meal) return <NoMeal />;
   const r = meal.recipe;
   const m = r.macros_per_serving;
@@ -42,17 +55,18 @@ export default function Swaps() {
     say = meal.swaps.length ? `I tuned ${r.title}. Now it fits our goal!` : `${r.title} already fits our goal. Let's cook it!`;
   } else if (fit.level === "close") {
     mood = "cheeky";
-    say = `Close! One thing is off. ${fit.misses[0]}.`;
+    say = `Close! One thing is off. ${fit.misses[0]}. Here's what I'd do.`;
   } else {
     mood = "worried";
     say = `Honest talk: ${r.title} works against ${goalWord}. ${
       fit.target !== null && fit.over > 0 ? `That's ~${num(fit.kcal, 0)} kcal, ${num(fit.over, 0)} over our ${fit.target} per meal.` : fit.misses[0] + "."
-    }`;
+    } Here's what I'd do.`;
   }
   if (error && !loading) say = `${error} ${say}`;
 
   const goPantry = () => { s.setStage("pantry"); router.push("/meal/pantry"); };
   const lighter = () => router.replace("/meal/feed");
+  const goOn = meal.tweak ? "Use my pick and check pantry" : "Cook it as a treat";
 
   return (
     <Stage
@@ -65,7 +79,7 @@ export default function Swaps() {
         : fit.level === "off" ? (
           <>
             <Button title="Find a lighter one" onPress={lighter} />
-            <Button title="Cook it as a treat" kind="ghost" onPress={goPantry} />
+            <Button title={goOn} kind="ghost" onPress={goPantry} />
           </>
         ) : (
           <>
@@ -107,6 +121,17 @@ export default function Swaps() {
             ))}
             {fit.verdict.estimated ? <Text style={[type.caption, { color: t.faint }]}>~ means I estimated the numbers.</Text> : null}
           </Card>
+
+          {needsRecs ? (
+            <>
+              <Text style={[type.label, { color: t.tint }]}>What I'd do · tap one to use it</Text>
+              {recs?.id !== meal.id ? <Text style={[type.caption, { color: t.sub }]}>Thinking of ideas…</Text> : null}
+              {recs?.id === meal.id && recs.list.length === 0 ? <Text style={[type.caption, { color: t.sub }]}>I couldn't think of ideas just now. Pick a lighter recipe, or cook it as a treat.</Text> : null}
+              {recs?.id === meal.id ? recs.list.map((x) => (
+                <Choice key={x.title} title={x.title} sub={`${x.how}${x.kcal !== null ? ` That is ${est(x.source)}${num(x.kcal, 0)} kcal.` : ""}`} selected={meal.tweak?.title === x.title} onPress={() => s.setTweak(meal.tweak?.title === x.title ? undefined : x)} />
+              )) : null}
+            </>
+          ) : null}
 
           {meal.swaps.map((sw) => (
             <Card key={sw.from}>

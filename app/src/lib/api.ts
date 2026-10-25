@@ -1,4 +1,4 @@
-import type { Goal, Recipe, Swap } from "./types";
+import type { Goal, Recipe, Recommendation, Swap } from "./types";
 
 // In a published app there is no fallback: if the server address is missing, say so plainly.
 const BASE = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http://localhost:8080" : "")).replace(/\/$/, "");
@@ -36,6 +36,9 @@ export const api = {
   ingest: (url: string, caption?: string) => post<Recipe & { cached?: boolean }>("/v1/ingest", { url, caption }),
   // Pal tunes the recipe to your goal: ingredient swaps, each with the energy it saves per serving.
   swaps: (recipe: Recipe, goal: Goal, mealKcal: number | null) => post<{ swaps: Swap[]; planner: string }>("/v1/swaps", { recipe, goal, mealKcal }),
+  // The dish does not fit the goal: what Pal recommends doing about it.
+  recommend: (recipe: Recipe, goal: Goal, mealKcal: number | null, kcalAfter: number, misses: string[]) =>
+    post<{ recommendations: Recommendation[]; planner: string }>("/v1/recommend", { recipe, goal, mealKcal, kcalAfter, misses }, 60_000),
   // A photo of your shelves: which of the recipe's ingredients Pal can see.
   pantry: (imageBase64: string, mimeType: string, ingredients: string[]) =>
     post<{ have: string[] }>("/v1/pantry", { image: imageBase64, mimeType, ingredients }, 90_000),

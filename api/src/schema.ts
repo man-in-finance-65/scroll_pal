@@ -102,3 +102,19 @@ export const PantryBody = z.object({
   mimeType: z.string().regex(/^image\//),
   ingredients: z.array(z.string()).min(1).max(60),
 });
+
+// One thing Pal recommends when a recipe does not fit the goal. kcal is the per serving energy if you do it (or null).
+export const Recommendation = z.object({
+  title: z.string(),
+  how: z.string(),
+  kcal: z.number().nullable(),
+  source: Source,
+});
+
+export const RecommendBody = z.object({
+  recipe: Recipe,
+  goal: Goal,
+  mealKcal: z.number().nullable().optional(), // the eater's target per meal, if known
+  kcalAfter: z.number(), // per serving after the swaps
+  misses: z.array(z.string().max(200)).max(8), // which checks the dish failed, with the maths
+});

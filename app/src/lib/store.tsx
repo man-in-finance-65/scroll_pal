@@ -4,7 +4,7 @@ import { api, ApiError } from "./api";
 import { fx } from "./fx";
 import { plain } from "./format";
 import { fillPlan, mondayOf, pactPlan } from "./meal";
-import type { Body, ChatSave, CookLog, Goal, Job, Meal, MealStage, Plan, Recipe, Stamp, Swap } from "./types";
+import type { Body, ChatSave, CookLog, Goal, Job, Meal, MealStage, Plan, Recipe, Recommendation, Stamp, Swap } from "./types";
 import { computeProgress, xpMath, type Progress, type XpEvent } from "./xp";
 
 // Everything lives on the phone (AsyncStorage). No accounts, no database.
@@ -68,6 +68,7 @@ type Ctx = State & {
   startMeal: (recipe: Recipe, slotId?: string) => void;
   setSwaps: (swaps: Swap[]) => void;
   setHave: (have: string[]) => void;
+  setTweak: (tweak: Recommendation | undefined) => void;
   setOrderUrl: (url: string) => void;
   setStage: (stage: MealStage) => void;
   cookMeal: () => DoneResult | null; // +50 XP
@@ -164,6 +165,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     update((s) => ({ ...s, recipe, meal: { id: newId(), recipe, swaps: [], have: [], stage: "swaps", slotId } })), [update]);
   // Swap "from" stays exact (it matches an ingredient); what Pal says is cleaned to house style.
   const setSwaps = useCallback((swaps: Swap[]) => setMeal((m) => ({ ...m, swaps: swaps.map((x) => ({ ...x, to: plain(x.to), why: plain(x.why) })) })), [setMeal]);
+  const setTweak = useCallback((tweak: Recommendation | undefined) => setMeal((m) => ({ ...m, tweak })), [setMeal]);
   const setHave = useCallback((have: string[]) => setMeal((m) => ({ ...m, have })), [setMeal]);
   const setOrderUrl = useCallback((orderUrl: string) => setMeal((m) => ({ ...m, orderUrl })), [setMeal]);
   const setStage = useCallback((stage: MealStage) => setMeal((m) => ({ ...m, stage })), [setMeal]);
@@ -239,7 +241,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, openRecipe,
-    setName, setGoal, setBody, finishOnboarding, startMeal, setSwaps, setHave, setOrderUrl, setStage, cookMeal, eatMeal,
+    setName, setGoal, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweak, setOrderUrl, setStage, cookMeal, eatMeal,
     makePact, skipSlot, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
