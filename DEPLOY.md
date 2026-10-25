@@ -2,6 +2,13 @@
 
 Everything deploys from GitHub (Actions), using the secrets stored on the repo. You never paste a key into a terminal.
 
+**Current way (since 2026-10-25): `Ship ScrollPal (server + app)`** (`.github/workflows/ship.yml`).
+Every push to `claude/nice-thompson-6oeu73` that touches `api/` or `app/` updates the server (`scrollpal-api` on
+Cloud Run, keys stay in Secret Manager) and then publishes the app to Expo Go branch `v1` pointed at it. It signs in
+to Google with the keyless setup from `scripts/connect-github.sh` (repo variables `GCP_WIF_PROVIDER`, `GCP_SA_EMAIL`,
+`GCP_PROJECT_ID`) and uses the `EXPO_TOKEN` secret. Open the app with the always-latest link in section 1.
+The older sections below still work but are no longer needed.
+
 | What | Workflow | Secrets it uses |
 |---|---|---|
 | The app, for Expo Go | `Publish app to Expo Go` | `EXPO_TOKEN` (already set) |
