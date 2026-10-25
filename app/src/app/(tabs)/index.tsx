@@ -51,7 +51,6 @@ export default function Home() {
       </View>
 
       <View style={{ alignItems: "center", gap: space.sm }}>
-        <View style={{ position: "absolute", top: 10, width: palSize * 1.2, height: palSize * 1.2, borderRadius: palSize * 0.6, backgroundColor: t.glow }} />
         <Pressable onPress={() => { fx.tap(); setPoke(true); }} accessibilityRole="button" accessibilityLabel="Poke Pal">
           <Pal mood={poke ? "cheer" : pal.mood.pal} size={palSize} />
         </Pressable>

@@ -1,5 +1,5 @@
 import * as Clipboard from "expo-clipboard";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Keyboard, Text } from "react-native";
 import type { PalMood } from "../../components/Pal";
@@ -8,6 +8,8 @@ import { useStore } from "../../lib/store";
 import { type, useTheme } from "../../lib/theme";
 
 // Action 1, feed Pal a link. The link becomes a recipe, then the meal flow starts (Pestle style: recipe first).
+// During onboarding this is step 3: Pal starts digesting and you carry on to your goal and body numbers while
+// Pal chews; onboarding then comes back here with ?job= and moves on to the swaps once the recipe is ready.
 const CAPTION_CODES = ["gemini_failed", "caption_needed", "not_a_recipe"];
 
 export default function Feed() {
@@ -15,7 +17,11 @@ export default function Feed() {
   const s = useStore();
   const [url, setUrl] = useState("");
   const [caption, setCaption] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ job?: string }>();
+  const [jobId, setJobId] = useState<string | null>(params.job ?? null);
+  const onboarding = !s.onboarded;
+  // Onboarding: coming back here and tapping Feed again with the same link reuses the digest already running.
+  const [sent, setSent] = useState<{ url: string; id: string } | null>(null);
   const job = s.jobs.find((j) => j.id === jobId);
 
   // Digested: start the meal with this recipe and move on.
@@ -40,7 +46,13 @@ export default function Feed() {
     const link = url.trim();
     if (!link) return;
     Keyboard.dismiss();
-    setJobId(s.digest(link));
+    if (onboarding && sent?.url === link) return router.push({ pathname: "/onboard/goal", params: { job: sent.id } });
+    const id = s.digest(link);
+    if (onboarding) {
+      setSent({ url: link, id });
+      return router.push({ pathname: "/onboard/goal", params: { job: id } });
+    }
+    setJobId(id);
   }
 
   function feedCaption() {
@@ -63,12 +75,12 @@ export default function Feed() {
     <Stage
       mood={mood}
       say={say}
-      step={[1, 6]}
+      step={onboarding ? [3, 5] : [1, 6]}
       cta={
         needCaption ? <Button title="Try the caption" onPress={feedCaption} disabled={!caption.trim()} />
         : <>
             <Button title={failed ? "Try another link" : "Feed Pal"} onPress={failed ? () => { s.dismissJob(job!.id); setJobId(null); setUrl(""); } : feed} disabled={!failed && (!url.trim() || busy)} loading={busy} />
-            {!busy && !failed ? <Button title="Import my Instagram saves" kind="ghost" onPress={() => router.push("/import")} /> : null}
+            {!busy && !failed && !onboarding ? <Button title="Import my Instagram saves" kind="ghost" onPress={() => router.push("/import")} /> : null}
           </>
       }
     >

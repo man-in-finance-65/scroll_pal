@@ -1,4 +1,4 @@
-import { router, useNavigation } from "expo-router";
+import { router } from "expo-router";
 import { useEffect, useId, type ReactNode } from "react";
 import { ActivityIndicator, Platform, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View, type TextInputProps, type ViewStyle } from "react-native";
 import Animated, { useAnimatedProps, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
@@ -41,15 +41,16 @@ export function Stage({
 }) {
   const t = useTheme();
   const insets = useSafeAreaInsets();
-  const nav = useNavigation(); // the hook, not the imperative router: safe while the first screen is still rendering
   // Short phones get a smaller Pal so the content and the button still fit.
   const { height } = useWindowDimensions();
   const pal = Math.round((palSize ?? 170) * (height < 700 ? 0.75 : 1));
   return (
     <View style={{ flex: 1, backgroundColor: t.bg, paddingTop: insets.top }}>
       <View style={[column, { height: 48, flexDirection: "row", alignItems: "center", paddingHorizontal: space.sm, gap: space.sm }]}>
-        {back && nav.canGoBack() ? (
-          <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => { fx.tap(); router.back(); }} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
+        {/* Always shown when a step allows going back. Asking "can I go back?" while the screen is still appearing
+            gave a stale "no" and hid the arrow, so the answer is checked on tap instead: back, or Home if nothing is behind. */}
+        {back ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Back" hitSlop={10} onPress={() => { fx.tap(); if (router.canGoBack()) router.back(); else router.replace("/"); }} style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}>
             <Text style={{ color: t.text, fontSize: 26, lineHeight: 28 }}>‹</Text>
           </Pressable>
         ) : <View style={{ width: 40 }} />}
@@ -58,7 +59,6 @@ export function Stage({
       </View>
       <ScrollView style={{ flex: 1 }} contentContainerStyle={[column, { flexGrow: 1, paddingHorizontal: space.md, paddingBottom: space.lg, gap: space.md }]} keyboardShouldPersistTaps="handled">
         <View style={{ alignItems: "center", gap: space.sm, paddingTop: space.sm }}>
-          <View style={{ position: "absolute", top: 0, width: pal * 1.5, height: pal * 1.5, borderRadius: pal * 0.75, backgroundColor: t.glow }} />
           <Pressable disabled={!onPal} onPress={onPal} accessibilityRole={onPal ? "button" : undefined} accessibilityLabel={onPal ? "Tap Pal" : undefined}>
             <Pal mood={mood} size={pal} />
           </Pressable>

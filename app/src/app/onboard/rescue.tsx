@@ -23,7 +23,7 @@ export default function Rescue() {
     <Stage
       mood={healed ? "cheer" : "sick"}
       say={LINES[Math.min(taps, TAPS)]}
-      step={[1, 4]}
+      step={[1, 5]}
       back={false}
       palSize={210}
       onPal={tap}
