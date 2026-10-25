@@ -18,13 +18,13 @@ export default function Wait() {
   return (
     <Stage
       mood="fit"
-      say={meal.orderUrl ? "Walmart is on it. Now we wait. Lay out what we have?" : "Off you go! Lay out what we have while you shop."}
+      say={meal.orderUrl ? "DoorDash is on it. Now we wait. Lay out what we have?" : "Off you go! Lay out what we have while you shop."}
       step={[4, 6]}
       palSize={130}
       cta={
         <>
           <Button title="Groceries are here" onPress={() => { s.setStage("cook"); router.push("/meal/cook"); }} />
-          {meal.orderUrl ? <Button title="Open my Walmart cart" kind="ghost" onPress={() => Linking.openURL(meal.orderUrl!).catch(() => {})} /> : null}
+          {meal.orderUrl ? <Button title="Check my DoorDash order" kind="ghost" onPress={() => Linking.openURL(meal.orderUrl!).catch(() => {})} /> : null}
         </>
       }
     >
