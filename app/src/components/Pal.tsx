@@ -15,8 +15,8 @@ const ART = {
 
 export type PalMood = keyof typeof ART;
 
-// The art is 600 × 639, so height follows width.
-const RATIO = 639 / 600;
+// The art is 992 × 1056, so height follows width.
+const RATIO = 1056 / 992;
 
 export function Pal({ mood, size = 200 }: { mood: PalMood; size?: number }) {
   const bob = useSharedValue(0);
