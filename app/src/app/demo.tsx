@@ -1,8 +1,7 @@
 import { createAudioPlayer, type AudioPlayer } from "expo-audio";
-import { CameraView, useCameraPermissions } from "expo-camera";
 import { router, Stack } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import { Pal } from "../components/Pal";
 import { Button, Card, FadeIn, NumberCard, Ring, Screen, SpeechBubble } from "../components/ui";
 import { BEATS, CLIPS, DEMO_DAY, DEMO_RECIPE, type Beat, type Clip } from "../lib/demoScript";
@@ -21,7 +20,6 @@ export default function Demo() {
   const t = useTheme();
   const [beat, setBeat] = useState<Beat | null>(null);
   const [phase, setPhase] = useState<"ready" | "playing" | "finished">("ready");
-  const [cam, askCam] = useCameraPermissions();
   const run = useRef(0);
   const skip = useRef<() => void>(() => {});
   const players = useRef<Partial<Record<Clip, AudioPlayer>>>({});
@@ -51,7 +49,6 @@ export default function Demo() {
     });
 
   async function play() {
-    if (cam && !cam.granted && cam.canAskAgain) await askCam().catch(() => {}); // ask now, not mid-recording
     const me = ++run.current;
     setPhase("playing");
     for (const b of BEATS) {
@@ -105,7 +102,7 @@ export default function Demo() {
             {b ? <SpeechBubble key={b.clip}>{b.say}</SpeechBubble> : null}
             <Pal state={b?.pal ?? "listening"} size={big ? 230 : 96} />
           </View>
-          {b && !big ? <Scene key={b.scene.startsWith("pantry") ? "pantry" : b.scene} scene={b.scene} /> : null}
+          {b && !big ? <Scene key={b.scene} scene={b.scene} /> : null}
         </View>
       </Screen>
     </Pressable>
@@ -155,7 +152,30 @@ function Scene({ scene }: { scene: Beat["scene"] }) {
     );
   }
 
-  if (scene === "pantry" || scene === "pantryChecked") return <Pantry checked={scene === "pantryChecked"} />;
+  if (scene === "pantry" || scene === "pantryChecked") {
+    const checked = scene === "pantryChecked";
+    const rows = [
+      { name: "Bananas", have: true },
+      { name: "Cocoa", have: true },
+      { name: "Greek yogurt", have: false },
+    ];
+    return (
+      <FadeIn>
+        <Card>
+          {tag}
+          <Text style={[type.h2, { color: t.text }]}>Your pantry</Text>
+          {rows.map((r, k) => (
+            <View key={r.name} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderTopWidth: k ? 1 : 0, borderColor: t.line }}>
+              <Text style={[type.body, { color: t.text }]}>{r.name}</Text>
+              <Text style={[type.body, { color: !checked ? t.faint : r.have ? t.ok : t.danger, fontWeight: "700" }]}>
+                {!checked ? "checking…" : r.have ? "✓ have it" : "✕ missing"}
+              </Text>
+            </View>
+          ))}
+        </Card>
+      </FadeIn>
+    );
+  }
 
   if (scene === "order" || scene === "ordered") {
     const placed = scene === "ordered";
@@ -163,17 +183,10 @@ function Scene({ scene }: { scene: Beat["scene"] }) {
       <FadeIn>
         <Card>
           {tag}
-          <Text style={[type.h2, { color: t.text }]}>{placed ? "✅ Checked out on Instacart" : "Your Instacart cart"}</Text>
-          {CART.map((c, k) => (
-            <View key={c.name} style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: 8, borderTopWidth: k ? 1 : 0, borderColor: t.line, opacity: c.buy ? 1 : 0.45 }}>
-              <Text style={[type.body, { color: t.text }]}>{c.name}</Text>
-              <Text style={[type.body, { color: c.buy ? brand.mint : t.sub, fontWeight: "700" }]}>{c.buy ? (placed ? "✓ ordered" : "+ in cart") : "have it"}</Text>
-            </View>
-          ))}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}>
-            {!placed && <ActivityIndicator color={t.tint} />}
-            <Text style={[type.caption, { color: t.sub }]}>{placed ? "On its way." : "Checking out on Instacart…"}</Text>
-          </View>
+          <Text style={[type.h2, { color: t.text }]}>{placed ? "✅ Ordered" : "24-hour grocer"}</Text>
+          <Text style={[type.body, { color: t.text }]}>Greek yogurt, 150 g</Text>
+          <Text style={[type.caption, { color: t.sub }]}>{placed ? "On its way." : "Open now, delivered with DoorDash."}</Text>
+          {!placed && <Button title="Order it" onPress={() => {}} />}
         </Card>
       </FadeIn>
     );
@@ -218,50 +231,6 @@ function Freezer() {
         </Ring>
         <Text style={[type.body, { color: t.sub }]}>In the freezer, firming up</Text>
       </View>
-    </FadeIn>
-  );
-}
-
-// The ingredients, with only what's missing going in the cart. Cart and pantry agree: you have bananas, cocoa and cookies.
-const CART = [
-  { name: "Frozen banana", buy: false },
-  { name: "Cocoa powder", buy: false },
-  { name: "Cookie", buy: false },
-  { name: "Greek yogurt, 150 g", buy: true },
-];
-
-// The pantry check is a real camera, so the recording shows your actual pantry. If the camera isn't allowed
-// (or there isn't one), it falls back to a plain list so the take still works.
-function Pantry({ checked }: { checked: boolean }) {
-  const t = useTheme();
-  const [perm] = useCameraPermissions();
-  const rows = [
-    { name: "Bananas", have: true },
-    { name: "Cocoa", have: true },
-    { name: "Greek yogurt", have: false },
-  ];
-  const list = (
-    <View style={{ gap: 6 }}>
-      {rows.map((r) => (
-        <View key={r.name} style={{ flexDirection: "row", justifyContent: "space-between", backgroundColor: t.card + "E6", borderRadius: radius.sm, paddingHorizontal: space.md, paddingVertical: 8 }}>
-          <Text style={[type.body, { color: t.text }]}>{r.name}</Text>
-          <Text style={[type.body, { color: !checked ? t.sub : r.have ? t.ok : t.danger, fontWeight: "700" }]}>
-            {!checked ? "checking…" : r.have ? "✓ have it" : "✕ missing"}
-          </Text>
-        </View>
-      ))}
-    </View>
-  );
-  return (
-    <FadeIn>
-      {perm?.granted ? (
-        <View style={{ height: 420, borderRadius: radius.lg, overflow: "hidden", backgroundColor: "#000", justifyContent: "flex-end" }}>
-          <CameraView style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0 }} facing="back" />
-          <View style={{ padding: space.md }}>{list}</View>
-        </View>
-      ) : (
-        <Card>{list}</Card>
-      )}
     </FadeIn>
   );
 }

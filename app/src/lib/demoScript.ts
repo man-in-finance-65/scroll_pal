@@ -6,7 +6,6 @@ import type { Recipe } from "./types";
 //
 // Each BEAT is one thing Pal says (a voice clip + the same words in a speech bubble) and what the screen shows while
 // he says it. After the clip ends, `gap` is the pause for YOU to say your line. Tap the screen to skip a gap.
-// The "doordash" clip says DoorDash out loud, so its bubble does too, while the screen shows Instacart.
 // If a take feels rushed or slow, change the gap numbers below. They are in milliseconds.
 
 export const CLIPS = {

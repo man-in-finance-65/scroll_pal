@@ -33,13 +33,7 @@
           "color": "#6C5CE7"
         }
       ],
-      "expo-audio",
-      [
-        "expo-camera",
-        {
-          "cameraPermission": "ScrollPal uses the camera so Pal can look at your pantry."
-        }
-      ]
+      "expo-audio"
     ],
     "experiments": {
       "typedRoutes": false
