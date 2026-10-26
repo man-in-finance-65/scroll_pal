@@ -51,7 +51,8 @@ export default function Home() {
       </View>
 
       <View style={{ alignItems: "center", gap: space.sm }}>
-        <Pressable onPress={() => { fx.tap(); setPoke(true); }} accessibilityRole="button" accessibilityLabel="Poke Pal">
+        {/* Hidden: hold Pal for 5 seconds to open the demo (app/demo.tsx). */}
+        <Pressable onPress={() => { fx.tap(); setPoke(true); }} onLongPress={() => { fx.levelUp(); router.push("/demo"); }} delayLongPress={5000} accessibilityRole="button" accessibilityLabel="Poke Pal">
           <Pal mood={poke ? "cheer" : pal.mood.pal} size={palSize} />
         </Pressable>
         <Bubble>{poke ? "Hehe. That tickles." : pal.mood.line}</Bubble>
