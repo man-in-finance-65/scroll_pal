@@ -55,7 +55,13 @@ export type Body = { heightCm: number; weightKg: number; targetKg: number };
 export type Swap = { from: string; to: string; why: string; kcal_saved: number; source: Source };
 
 // What Pal recommends when a dish does not fit your goal. kcal is per serving if you do it.
-export type Recommendation = { title: string; how: string; kcal: number | null; source: Source };
+// kind: "recipe" changes the dish, "side" goes next to it. fixes: the goal check it targets. adds: what it changes per serving.
+// (kind, fixes and adds are missing on picks saved before 2026-10-27.)
+export type Adds = { kcal: number; protein_g: number; carbs_g: number; fat_g: number };
+export type Recommendation = { title: string; how: string; kcal: number | null; source: Source; kind?: "recipe" | "side"; fixes?: string; adds?: Adds };
+
+// What the user never wants Pal to suggest. Same ids as api/src/diet.ts.
+export type DietId = "vegetarian" | "vegan" | "no_dairy" | "no_eggs" | "gluten_free" | "no_pork" | "no_nuts" | "no_shellfish";
 
 // The meal you're on right now, from the link to the plate.
 export type MealStage = "swaps" | "pantry" | "shop" | "wait" | "cook" | "eat" | "done";

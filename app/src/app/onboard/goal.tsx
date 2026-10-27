@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { Text, View } from "react-native";
+import { DietChips } from "../../components/DietChips";
 import { Button, Card, Choice, Stage } from "../../components/ui";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
@@ -46,6 +47,7 @@ export default function GoalStep() {
           </View>
         </Card>
       ) : null}
+      <DietChips />
     </Stage>
   );
 }

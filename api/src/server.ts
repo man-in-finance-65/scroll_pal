@@ -89,7 +89,7 @@ app.post("/v1/swaps", limit(60), async (req: Request, res: Response) => {
   const body = SwapsBody.safeParse(req.body);
   if (!body.success) return bad(res, "Send {recipe, goal, mealKcal?}.");
   try {
-    const out = await swapsFor(body.data.recipe, body.data.goal, body.data.mealKcal ?? null);
+    const out = await swapsFor(body.data.recipe, body.data.goal, body.data.mealKcal ?? null, body.data.diet ?? []);
     if (out.note) console.warn(`swaps: ${out.planner} used. ${out.note}`);
     res.json(out);
   } catch (e) {
@@ -100,9 +100,10 @@ app.post("/v1/swaps", limit(60), async (req: Request, res: Response) => {
 // The dish does not fit the goal: Pal recommends what to do about it. Never fails: plain rules answer without AI.
 app.post("/v1/recommend", limit(60), async (req: Request, res: Response) => {
   const body = RecommendBody.safeParse(req.body);
-  if (!body.success) return bad(res, "Send {recipe, goal, kcalAfter, misses[], mealKcal?}.");
+  if (!body.success) return bad(res, "Send {recipe, goal, kcalAfter, misses[], mealKcal?, checks?, diet?}.");
   try {
-    const out = await recommendFor(body.data.recipe, body.data.goal, body.data.mealKcal ?? null, body.data.kcalAfter, body.data.misses);
+    const b = body.data;
+    const out = await recommendFor(b.recipe, b.goal, b.mealKcal ?? null, b.kcalAfter, b.misses, b.checks ?? [], b.diet ?? []);
     if (out.note) console.warn(`recommend: ${out.planner} used. ${out.note}`);
     res.json(out);
   } catch (e) {

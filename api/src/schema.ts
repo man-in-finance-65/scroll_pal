@@ -93,10 +93,14 @@ export const Swap = z.object({
   source: Source,
 });
 
+// What the user never wants suggested (vegetarian, no dairy, nut allergy...). Ids from api/src/diet.ts.
+export const Diet = z.array(z.string().max(30)).max(12);
+
 export const SwapsBody = z.object({
   recipe: Recipe,
   goal: Goal,
   mealKcal: z.number().nullable().optional(),
+  diet: Diet.optional(),
 });
 
 export const PantryBody = z.object({
@@ -105,10 +109,17 @@ export const PantryBody = z.object({
   ingredients: z.array(z.string()).min(1).max(60),
 });
 
-// One thing Pal recommends when a recipe does not fit the goal. kcal is the per serving energy if you do it (or null).
+// What a fix changes, per serving. Negative = less (a lighter swap). Always Pal's estimate.
+export const Adds = z.object({ kcal: z.number(), protein_g: z.number(), carbs_g: z.number(), fat_g: z.number() });
+
+// One fix Pal recommends when a recipe misses a goal check. kcal is the per serving energy if you do it (or null).
+// kind: "recipe" changes the dish itself, "side" goes on the plate next to it. fixes: the check it targets (its id).
 export const Recommendation = z.object({
   title: z.string(),
   how: z.string(),
+  kind: z.enum(["recipe", "side"]),
+  fixes: z.string(),
+  adds: Adds,
   kcal: z.number().nullable(),
   source: Source,
 });
@@ -119,4 +130,8 @@ export const RecommendBody = z.object({
   mealKcal: z.number().nullable().optional(), // the eater's target per meal, if known
   kcalAfter: z.number(), // per serving after the swaps
   misses: z.array(z.string().max(200)).max(8), // which checks the dish failed, with the maths
+  // Every goal check with its numbers, so the server can score how well a fix closes the gaps without breaking a pass.
+  // id: kcal, protein, density, fat, carbs, time, target. value is the dish now; lo/hi are the bounds (either may be missing).
+  checks: z.array(z.object({ id: z.string().max(20), label: z.string().max(60), value: z.number(), lo: z.number().nullable(), hi: z.number().nullable(), pass: z.boolean() })).max(10).optional(),
+  diet: Diet.optional(),
 });

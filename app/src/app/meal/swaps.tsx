@@ -5,7 +5,7 @@ import type { PalMood } from "../../components/Pal";
 import { Button, Card, Choice, NoMeal, Row, Stage } from "../../components/ui";
 import { api, ApiError } from "../../lib/api";
 import { est, num, plain } from "../../lib/format";
-import { fitFor, mealTarget } from "../../lib/meal";
+import { fitFor, fixMath, mealTarget } from "../../lib/meal";
 import { useStore } from "../../lib/store";
 import { brand, space, type, useTheme } from "../../lib/theme";
 import type { Recommendation } from "../../lib/types";
@@ -22,7 +22,7 @@ export default function Swaps() {
 
   useEffect(() => {
     if (!meal || meal.swaps.length) return;
-    api.swaps(meal.recipe, s.goal, aim?.perMeal ?? null).then(
+    api.swaps(meal.recipe, s.goal, aim?.perMeal ?? null, s.diet).then(
       (r) => { s.setSwaps(r.swaps); setLoading(false); },
       (e: ApiError) => { setError(e.message); setLoading(false); },
     );
@@ -34,7 +34,7 @@ export default function Swaps() {
   const needsRecs = !!meal && !loading && fitNow!.level !== "good";
   useEffect(() => {
     if (!needsRecs || !meal || recs?.id === meal.id) return;
-    api.recommend(meal.recipe, s.goal, aim?.perMeal ?? null, fitNow!.kcal, fitNow!.misses).then(
+    api.recommend(meal.recipe, s.goal, aim?.perMeal ?? null, fitNow!.kcal, fitNow!.verdict.rows, s.diet).then(
       (r) => setRecs({ id: meal.id, list: r.recommendations.map((x) => ({ ...x, title: plain(x.title), how: plain(x.how) })) }),
       () => setRecs({ id: meal.id, list: [] }),
     );
@@ -128,7 +128,17 @@ export default function Swaps() {
               {recs?.id !== meal.id ? <Text style={[type.caption, { color: t.sub }]}>Thinking of ideas…</Text> : null}
               {recs?.id === meal.id && recs.list.length === 0 ? <Text style={[type.caption, { color: t.sub }]}>I couldn't think of ideas just now. Pick a lighter recipe, or cook it as a treat.</Text> : null}
               {recs?.id === meal.id ? recs.list.map((x) => (
-                <Choice key={x.title} title={x.title} sub={`${x.how}${x.kcal !== null ? ` That is ${est(x.source)}${num(x.kcal, 0)} kcal.` : ""}`} selected={meal.tweak?.title === x.title} onPress={() => s.setTweak(meal.tweak?.title === x.title ? undefined : x)} />
+                <Choice
+                  key={x.title}
+                  icon={x.kind === "side" ? "🥣" : x.kind === "recipe" ? "🍳" : undefined}
+                  title={x.title}
+                  sub={[
+                    x.kind ? (x.kind === "side" ? "On the side. " : "In the dish. ") + x.how : x.how,
+                    fixMath(x, r, fit.kcal) ?? (x.kcal !== null ? `That is ${est(x.source)}${num(x.kcal, 0)} kcal.` : ""),
+                  ].filter(Boolean).join("\n")}
+                  selected={meal.tweak?.title === x.title}
+                  onPress={() => s.setTweak(meal.tweak?.title === x.title ? undefined : x)}
+                />
               )) : null}
             </>
           ) : null}

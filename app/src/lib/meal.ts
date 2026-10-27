@@ -1,6 +1,6 @@
 import { num } from "./format";
 import { judge, type Verdict } from "./goals";
-import type { Body, Goal, Pact, Plan, PlanSlot, Recipe, Swap } from "./types";
+import type { Body, Goal, Pact, Plan, PlanSlot, Recipe, Recommendation, Swap } from "./types";
 import { localDay } from "./xp";
 
 // Your energy target per meal, from your body and goal. A simple rule of thumb, so it is marked "~" everywhere:
@@ -144,7 +144,7 @@ export function fitFor(recipe: Recipe, swaps: Swap[], goal: Goal, body: Body | n
     // Cut or maintain: stay at or under your target. Bulk: don't fall far short of it.
     const pass = goal === "bulk" ? kcal >= target * 0.8 : kcal <= target;
     const math = goal === "bulk" ? `${num(kcal, 0)} kcal vs at least ${num(target * 0.8, 0)}` : `${num(kcal, 0)} kcal vs your ${target} per meal`;
-    verdict.rows.push({ label: "Your meal target", rule: "Fits the meal size I worked out for you", pass, math });
+    verdict.rows.push({ id: "target", label: "Your meal target", rule: "Fits the meal size I worked out for you", pass, math, value: kcal, lo: goal === "bulk" ? Math.floor(target * 0.8) : null, hi: goal === "bulk" ? null : target });
     verdict.total++;
     if (pass) verdict.passed++;
   }
@@ -154,3 +154,19 @@ export function fitFor(recipe: Recipe, swaps: Swap[], goal: Goal, body: Body | n
   return { level, verdict, misses, kcal, target, over: target !== null && kcal > target ? kcal - target : 0, halfFits: goal !== "bulk" && kcal > limit && Math.floor(kcal / 2) <= limit };
 }
 
+
+// What one of Pal's fixes changes, with the math, per serving: "~22 g + 17 g = 39 g protein · ~480 + 100 = 580 kcal".
+// Protein and energy always; carbs or fat too when that is the check the fix targets. Never rounded up.
+export function fixMath(x: Recommendation, recipe: Recipe, kcalNow: number): string | null {
+  const a = x.adds;
+  if (!a || (a.kcal === 0 && a.protein_g === 0 && a.carbs_g === 0 && a.fat_g === 0)) return null;
+  const m = recipe.macros_per_serving;
+  const line = (before: number, add: number, unit: string, what: string, d = 1) =>
+    `~${num(before, d)} ${add < 0 ? "minus" : "+"} ${num(Math.abs(add), d)} = ${num(before + add, d)}${unit} ${what}`;
+  const parts = [];
+  if (a.protein_g !== 0) parts.push(line(m.protein_g, a.protein_g, " g", "protein"));
+  parts.push(line(kcalNow, a.kcal, "", "kcal", 0));
+  if (x.fixes === "carbs" && a.carbs_g !== 0) parts.push(line(m.carbs_g, a.carbs_g, " g", "carbs"));
+  if (x.fixes === "fat" && a.fat_g !== 0) parts.push(line(m.fat_g, a.fat_g, " g", "fat"));
+  return parts.join(" · ");
+}

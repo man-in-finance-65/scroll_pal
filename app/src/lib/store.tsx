@@ -4,7 +4,7 @@ import { api, ApiError, type Shot } from "./api";
 import { fx } from "./fx";
 import { plain } from "./format";
 import { fillPlan, mondayOf, pactPlan } from "./meal";
-import type { Body, ChatSave, CookLog, Goal, Job, Meal, MealStage, Plan, Recipe, Recommendation, Stamp, Swap } from "./types";
+import type { Body, ChatSave, CookLog, DietId, Goal, Job, Meal, MealStage, Plan, Recipe, Recommendation, Stamp, Swap } from "./types";
 import { computeProgress, xpMath, type Progress, type XpEvent } from "./xp";
 
 // Everything lives on the phone (AsyncStorage). No accounts, no database.
@@ -13,6 +13,7 @@ type State = {
   onboarded: boolean;
   name: string;
   goal: Goal;
+  diet: DietId[]; // what Pal never suggests
   body: Body | null;
   recipe: Recipe | null; // the recipe currently open
   recipes: Recipe[];
@@ -33,6 +34,7 @@ const initial = (): State => ({
   onboarded: false,
   name: "",
   goal: "maintain",
+  diet: [],
   body: null,
   recipe: null,
   recipes: [],
@@ -63,6 +65,7 @@ type Ctx = State & {
   openRecipe: (recipe: Recipe) => void;
   setName: (name: string) => void;
   setGoal: (g: Goal) => void;
+  setDiet: (d: DietId[]) => void;
   setBody: (b: Body) => void;
   finishOnboarding: () => void;
   startMeal: (recipe: Recipe, slotId?: string) => void;
@@ -157,6 +160,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const openRecipe = useCallback((recipe: Recipe) => update((s) => ({ ...s, recipe })), [update]);
   const setName = useCallback((name: string) => update((s) => ({ ...s, name })), [update]);
   const setGoal = useCallback((goal: Goal) => update((s) => ({ ...s, goal })), [update]);
+  const setDiet = useCallback((diet: DietId[]) => update((s) => ({ ...s, diet })), [update]);
   const setBody = useCallback((body: Body) => update((s) => ({ ...s, body })), [update]);
   const finishOnboarding = useCallback(() => update((s) => ({ ...s, onboarded: true })), [update]);
 
@@ -241,7 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, openRecipe,
-    setName, setGoal, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweak, setOrderUrl, setStage, cookMeal, eatMeal,
+    setName, setGoal, setDiet, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweak, setOrderUrl, setStage, cookMeal, eatMeal,
     makePact, skipSlot, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

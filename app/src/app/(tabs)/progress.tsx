@@ -1,5 +1,6 @@
 import { router } from "expo-router";
 import { Alert, Platform, Switch, Text, View } from "react-native";
+import { DietChips } from "../../components/DietChips";
 import { Pal } from "../../components/Pal";
 import { Bar, Bubble, Button, Card, Choice, NumberCard, Row, Screen } from "../../components/ui";
 import { stampEmoji } from "../../lib/cuisine";
@@ -80,6 +81,7 @@ export default function Progress() {
       <View style={{ gap: space.sm }}>
         {GOALS.map((g) => <Choice key={g.value} title={g.title} icon={g.icon} selected={s.goal === g.value} onPress={() => s.setGoal(g.value)} />)}
       </View>
+      <DietChips />
 
       {s.stamps.length ? (
         <Card>
