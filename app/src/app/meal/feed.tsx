@@ -10,7 +10,7 @@ import { type, useTheme } from "../../lib/theme";
 // Action 1, feed Pal a link. The link becomes a recipe, then the meal flow starts (Pestle style: recipe first).
 // During onboarding this is step 3: Pal starts digesting and you carry on to your goal and body numbers while
 // Pal chews; onboarding then comes back here with ?job= and moves on to the swaps once the recipe is ready.
-const CAPTION_CODES = ["gemini_failed", "caption_needed", "not_a_recipe"];
+const CAPTION_CODES = ["gemini_failed", "caption_needed", "not_a_recipe", "video_unavailable"];
 
 export default function Feed() {
   const t = useTheme();

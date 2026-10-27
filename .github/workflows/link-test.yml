@@ -1,0 +1,37 @@
+name: Link test
+
+# Runs real links through the same digest code the server uses (real Gemini, a few cents). The key is never printed.
+on:
+  push:
+    branches: [claude/compassionate-cerf-k1v9mc]
+    paths: [".github/workflows/link-test.yml", "api/src/**"]
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: "Space-separated links (leave empty for the built-in set)"
+        required: false
+        default: ""
+
+jobs:
+  links:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: api
+    env:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
+      MOCK_AI: "0"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - run: npm ci
+      - name: Digest links
+        run: |
+          URLS="${{ inputs.urls }}"
+          [ -n "$URLS" ] || URLS="https://www.allrecipes.com/recipe/223042/chicken-parmesan/ https://www.bbcgoodfood.com/recipes/easy-chicken-curry https://www.budgetbytes.com/one-pot-chicken-and-rice/ https://www.youtube.com/shorts/GKT0ZKpidMc"
+          npm run test:links -- $URLS

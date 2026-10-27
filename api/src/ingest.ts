@@ -1,5 +1,5 @@
 import { cache, normalizeUrl, urlHash, youtubeId } from "./cache.js";
-import { readRecipe, type GeminiInfo } from "./gemini.js";
+import { readRecipe, readRecipeFromUrl, type GeminiInfo } from "./gemini.js";
 import { MOCK_RECIPE } from "./mock.js";
 import { pageToCaption, readPage } from "./page.js";
 import type { Recipe } from "./schema.js";
@@ -50,6 +50,10 @@ async function withRetry(input: { youtubeUrl?: string; caption?: string }): Prom
     } catch (e) {
       detail = `${tries[i].model}: ${cleanDetail(e)} (after ${((Date.now() - t0) / 1000).toFixed(0)}s)`;
       console.warn(`ingest attempt ${i + 1} failed: ${detail}`);
+      // YouTube refuses Gemini for private, removed or age restricted videos. A retry can't help.
+      if (input.youtubeUrl && /does not have permission|PERMISSION_DENIED/i.test(detail)) {
+        throw new IngestError(422, "video_unavailable", "I can't open that video. It might be private or removed. Paste the caption and I'll read that instead.", detail);
+      }
       // No credits left (HTTP 402): a retry can't help, and the owner needs to know.
       if (/\b402\b|prepayment|credits are depleted|billing/i.test(detail)) {
         throw new IngestError(503, "gemini_billing", "I've run out of brain power for now. Whoever runs me needs to top up my Gemini credits.", detail);
@@ -58,6 +62,20 @@ async function withRetry(input: { youtubeUrl?: string; caption?: string }): Prom
     }
   }
   throw new IngestError(502, "gemini_failed", CAPTION_ASK, detail);
+}
+
+// Gemini opens the link itself. Returns null (so Pal asks for the caption) when it can't find a real recipe there.
+async function readLinkWithGemini(url: string): Promise<{ recipe: Recipe; info: GeminiInfo } | null> {
+  const a = attempts()[0];
+  try {
+    const { recipe, info, opened } = await readRecipeFromUrl(url, { model: a.model, timeoutMs: 60_000 });
+    console.log(`ingest via Gemini link reading: opened=${opened} confidence=${recipe.confidence} title="${recipe.title}"`);
+    // Higher bar than usual: with no page text of our own, a low score usually means a guess.
+    return recipe.confidence >= 0.5 ? { recipe, info } : null;
+  } catch (e) {
+    console.warn(`ingest via Gemini link reading failed: ${a.model}: ${cleanDetail(e)}`);
+    return null;
+  }
 }
 
 export type Digested = Recipe & { image: string | null; source_url: string };
@@ -82,7 +100,14 @@ export async function ingest(url: string, caption?: string): Promise<{ recipe: D
       // Almost nothing readable (a login wall, a video-only page): ask for the caption instead of guessing.
       text = body.replace(/Title: [^\n]*\n?/, "").trim().length >= 40 || caption ? body : undefined;
     }
-    if (!text && process.env.MOCK_AI !== "1") throw new IngestError(422, "caption_needed", HIDDEN_ASK);
+    // Our server couldn't read it (many sites block servers): let Gemini open the link from Google's side.
+    if (!text && process.env.MOCK_AI !== "1") {
+      const viaGemini = await readLinkWithGemini(url.trim());
+      if (!viaGemini) throw new IngestError(422, "caption_needed", HIDDEN_ASK);
+      const out: Digested = { ...viaGemini.recipe, image, source_url: url.trim() };
+      cache.set(key, out);
+      return { recipe: out, cached: false, info: viaGemini.info };
+    }
   }
 
   const { recipe, info } = await withRetry({ youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption: text });

@@ -82,6 +82,38 @@ export async function readRecipe(
   };
 }
 
+// For links our server can't read itself (Instagram, TikTok and big recipe sites block it): Gemini opens the page
+// from Google's side (URL context) and may look the post up (Google Search). It must not invent a recipe.
+const URL_PROMPT = `Open this link and find the recipe in it: the caption, description or recipe on that exact page.
+If you cannot open it, or it has no recipe, set confidence to 0. Never make up a recipe from the title alone.
+Reply with ONLY a JSON object, no other text, with these fields:
+title, creator, cuisine, servings (integer, at least 1), ingredients [{name, qty (number or null), unit, source}], steps [string],
+prep_minutes, cook_minutes, macros_per_serving {kcal, protein_g, carbs_g, fat_g, source}, confidence.`;
+
+export async function readRecipeFromUrl(url: string, opts: { model: string; timeoutMs: number }): Promise<{ recipe: Recipe; info: GeminiInfo; opened: string }> {
+  const t0 = Date.now();
+  // Tools and a forced JSON schema don't mix on every model, so ask for JSON in words and pull it out of the answer.
+  const res = await ai().models.generateContent({
+    model: opts.model,
+    contents: [{ role: "user", parts: [{ text: `Link: ${url}\n\n${URL_PROMPT}\n\n${PROMPT}` }] }],
+    config: {
+      tools: [{ urlContext: {} }, { googleSearch: {} }],
+      temperature: 0.2,
+      abortSignal: AbortSignal.timeout(opts.timeoutMs),
+    },
+  });
+  const text = res.text ?? "";
+  const json = text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+  if (!json) throw new Error("Gemini returned no recipe for the link");
+  const opened = (res.candidates?.[0]?.urlContextMetadata?.urlMetadata ?? []).map((m) => m.urlRetrievalStatus ?? "?").join(",") || "none";
+  const u = res.usageMetadata;
+  return {
+    recipe: Recipe.parse(JSON.parse(json)),
+    info: { model: opts.model, ms: Date.now() - t0, promptTokens: u?.promptTokenCount, outputTokens: u?.candidatesTokenCount, thoughtTokens: u?.thoughtsTokenCount, thinking: "default" },
+    opened,
+  };
+}
+
 // Meal plan from Gemini: the second choice when Claude isn't set up or is down, before the plain built-in planner.
 const planSchema = (() => {
   const { $schema, ...rest } = z.toJSONSchema(Plan) as Record<string, unknown>;
