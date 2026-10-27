@@ -1,5 +1,5 @@
 import { cache, normalizeUrl, urlHash, youtubeId } from "./cache.js";
-import { readRecipe, readRecipeFromUrl, type GeminiInfo } from "./gemini.js";
+import { readRecipe, readRecipeFromUrl, type GeminiInfo, type Shot } from "./gemini.js";
 import { MOCK_RECIPE } from "./mock.js";
 import { pageToCaption, readPage } from "./page.js";
 import type { Recipe } from "./schema.js";
@@ -10,8 +10,8 @@ export class IngestError extends Error {
   }
 }
 
-const CAPTION_ASK = "That link was too hard to digest. Paste the caption and I'll try that instead.";
-const HIDDEN_ASK = "That one was hard to digest. The site keeps its caption to itself. Copy the caption and paste it below, and I'll take it from there.";
+const CAPTION_ASK = "That link was too hard to digest. Paste the caption, or send me a screenshot of it, and I'll try that instead.";
+const HIDDEN_ASK = "That one was hard to digest. The site keeps its caption to itself. Paste the caption below, or send me a screenshot of it.";
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 // Attempt 1 uses the main model. Attempt 2 (the one retry) uses a smaller, faster model with a shorter limit.
@@ -28,7 +28,7 @@ const cleanDetail = (e: unknown) => {
   return text.replace(/AIza[0-9A-Za-z_-]{20,}/g, "***").replace(/\s+/g, " ").slice(0, 220);
 };
 
-async function callOnce(input: { youtubeUrl?: string; caption?: string }, a: { model: string; timeoutMs: number }): Promise<{ recipe: Recipe; info?: GeminiInfo }> {
+async function callOnce(input: { youtubeUrl?: string; caption?: string; shot?: Shot }, a: { model: string; timeoutMs: number }): Promise<{ recipe: Recipe; info?: GeminiInfo }> {
   const mode = process.env.MOCK_AI;
   if (mode === "1") {
     await sleep(1200); // long enough to see Pal "Thinking"
@@ -38,7 +38,7 @@ async function callOnce(input: { youtubeUrl?: string; caption?: string }, a: { m
   return readRecipe(input, a);
 }
 
-async function withRetry(input: { youtubeUrl?: string; caption?: string }): Promise<{ recipe: Recipe; info?: GeminiInfo }> {
+async function withRetry(input: { youtubeUrl?: string; caption?: string; shot?: Shot }): Promise<{ recipe: Recipe; info?: GeminiInfo }> {
   const tries = attempts();
   let detail = "";
   for (let i = 0; i < tries.length; i++) {
@@ -80,10 +80,10 @@ async function readLinkWithGemini(url: string): Promise<{ recipe: Recipe; info: 
 
 export type Digested = Recipe & { image: string | null; source_url: string };
 
-export async function ingest(url: string, caption?: string): Promise<{ recipe: Digested; cached: boolean; info?: GeminiInfo }> {
+export async function ingest(url: string, caption?: string, shot?: Shot): Promise<{ recipe: Digested; cached: boolean; info?: GeminiInfo }> {
   const ytId = youtubeId(url);
-  // Caption text changes the answer, so it is part of the cache key.
-  const key = urlHash(url) + (caption ? ":" + urlHash(caption) : "");
+  // Caption text (or a screenshot) changes the answer, so it is part of the cache key.
+  const key = urlHash(url) + (caption ? ":" + urlHash(caption) : "") + (shot ? ":" + urlHash(shot.data) : "");
   const hit = cache.get<Digested>(key);
   if (hit) return { recipe: hit, cached: true };
 
@@ -91,7 +91,7 @@ export async function ingest(url: string, caption?: string): Promise<{ recipe: D
   // plus whatever the user pasted.
   let image: string | null = ytId ? `https://img.youtube.com/vi/${ytId}/hqdefault.jpg` : null;
   let text = caption;
-  if (!ytId) {
+  if (!ytId && !shot) {
     if (!/^https?:\/\//i.test(url.trim())) throw new IngestError(422, "bad_link", "That doesn't look like a link. Paste the full address, starting with https://");
     const page = process.env.MOCK_AI === "1" ? null : await readPage(url).catch(() => null);
     if (page) {
@@ -110,9 +110,12 @@ export async function ingest(url: string, caption?: string): Promise<{ recipe: D
     }
   }
 
-  const { recipe, info } = await withRetry({ youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption: text });
+  // A screenshot is all Pal needs: no video watching, no page reading.
+  const { recipe, info } = await withRetry(shot ? { caption, shot } : { youtubeUrl: ytId ? normalizeUrl(url) : undefined, caption: text });
   if (recipe.confidence < 0.2) {
-    throw new IngestError(422, "not_a_recipe", "I couldn't find a recipe in that one. If there is one, paste the caption and I'll take another bite.");
+    throw new IngestError(422, "not_a_recipe", shot
+      ? "I couldn't read a recipe in that screenshot. Make sure the whole caption is on screen, or paste it instead."
+      : "I couldn't find a recipe in that one. If there is one, paste the caption or send a screenshot and I'll take another bite.");
   }
   const out: Digested = { ...recipe, image, source_url: url.trim() };
   cache.set(key, out);

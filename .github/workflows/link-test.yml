@@ -42,3 +42,6 @@ jobs:
             echo "::error::Pal made up a recipe for a link it could not read"; exit 1
           fi
           echo "Good: Pal asked for the caption."
+      - name: A screenshot of an Instagram caption digests
+        if: ${{ inputs.urls == '' }}
+        run: SHOT=scripts/fixtures/caption-shot.jpg npm run test:links -- https://www.instagram.com/reel/C8qXbYfP6eS/

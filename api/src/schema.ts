@@ -36,6 +36,8 @@ export type Recipe = z.infer<typeof Recipe>;
 export const IngestBody = z.object({
   url: z.string().trim().min(1),
   caption: z.string().trim().optional(),
+  // A screenshot of the caption (base64, no "data:" prefix), for posts whose text can't be copied easily.
+  shot: z.object({ data: z.string().min(100), mimeType: z.string().regex(/^image\//) }).optional(),
 });
 
 export const Goal = z.enum(["bulk", "cut", "maintain"]);

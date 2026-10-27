@@ -15,7 +15,7 @@ app.set("trust proxy", true); // behind Cloud Run: req.ip is the visitor, not Go
 // Pantry photos are big; everything else is small text, so keep the tight limit there.
 const smallJson = express.json({ limit: "200kb" });
 const photoJson = express.json({ limit: "12mb" });
-app.use((req, res, next) => (req.path === "/v1/pantry" ? photoJson : smallJson)(req, res, next));
+app.use((req, res, next) => (req.path === "/v1/pantry" || req.path === "/v1/ingest" ? photoJson : smallJson)(req, res, next));
 // Phones don't need this; it lets the web preview of the app call the API too.
 app.use((req, res, next) => {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -31,9 +31,9 @@ app.get("/health", (_req, res) => res.json({ ok: true, mock: process.env.MOCK_AI
 
 app.post("/v1/ingest", async (req: Request, res: Response) => {
   const body = IngestBody.safeParse(req.body);
-  if (!body.success) return bad(res, "Send {url, caption?}.");
+  if (!body.success) return bad(res, "Send {url, caption?, shot?}.");
   try {
-    const { recipe, cached, info } = await ingest(body.data.url, body.data.caption);
+    const { recipe, cached, info } = await ingest(body.data.url, body.data.caption, body.data.shot);
     console.log(`ingest ok cached=${cached} title="${recipe.title}" ${info ? `model=${info.model} ms=${info.ms} tokens in/out/thinking=${info.promptTokens}/${info.outputTokens}/${info.thoughtTokens ?? 0} thinking=${info.thinking}` : ""}`);
     res.json({ ...recipe, cached, timing: info });
   } catch (e) {

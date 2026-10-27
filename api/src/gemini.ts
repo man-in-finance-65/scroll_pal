@@ -52,13 +52,16 @@ async function generate(model: string, parts: Array<Record<string, unknown>>, ti
   });
 }
 
+export type Shot = { data: string; mimeType: string };
+
 export async function readRecipe(
-  input: { youtubeUrl?: string; caption?: string },
+  input: { youtubeUrl?: string; caption?: string; shot?: Shot },
   opts: { model: string; timeoutMs: number },
 ): Promise<{ recipe: Recipe; info: GeminiInfo }> {
   const parts: Array<Record<string, unknown>> = [];
   if (input.youtubeUrl) parts.push({ fileData: { fileUri: input.youtubeUrl } });
   if (input.caption) parts.push({ text: `Caption / description text:\n${input.caption}` });
+  if (input.shot) parts.push({ inlineData: input.shot }, { text: "That image is a screenshot of the post. Read the caption and any recipe text in it." });
   parts.push({ text: PROMPT });
 
   const t0 = Date.now();

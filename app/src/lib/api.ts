@@ -3,6 +3,8 @@ import type { Goal, Recipe, Recommendation, Swap } from "./types";
 // In a published app there is no fallback: if the server address is missing, say so plainly.
 const BASE = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http://localhost:8080" : "")).replace(/\/$/, "");
 
+export type Shot = { data: string; mimeType: string };
+
 export class ApiError extends Error {
   constructor(public code: string, message: string, public detail?: string) {
     super(message);
@@ -33,7 +35,8 @@ async function post<T>(path: string, body: unknown, timeoutMs = 150_000): Promis
 }
 
 export const api = {
-  ingest: (url: string, caption?: string) => post<Recipe & { cached?: boolean }>("/v1/ingest", { url, caption }),
+  // shot: a screenshot of the post's caption, for when the text can't be copied.
+  ingest: (url: string, caption?: string, shot?: Shot) => post<Recipe & { cached?: boolean }>("/v1/ingest", { url, caption, shot }),
   // Pal tunes the recipe to your goal: ingredient swaps, each with the energy it saves per serving.
   swaps: (recipe: Recipe, goal: Goal, mealKcal: number | null) => post<{ swaps: Swap[]; planner: string }>("/v1/swaps", { recipe, goal, mealKcal }),
   // The dish does not fit the goal: what Pal recommends doing about it.

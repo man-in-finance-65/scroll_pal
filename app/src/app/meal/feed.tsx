@@ -1,4 +1,5 @@
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { Keyboard, Text } from "react-native";
@@ -17,6 +18,7 @@ export default function Feed() {
   const s = useStore();
   const [url, setUrl] = useState("");
   const [caption, setCaption] = useState("");
+  const [shotNote, setShotNote] = useState("");
   const params = useLocalSearchParams<{ job?: string }>();
   const [jobId, setJobId] = useState<string | null>(params.job ?? null);
   const onboarding = !s.onboarded;
@@ -61,6 +63,25 @@ export default function Feed() {
     setJobId(s.digest(job.url, caption.trim()));
   }
 
+  // Instagram captions are hard to copy on a phone. A screenshot of the post works too: Gemini reads the text in it.
+  async function feedScreenshot() {
+    if (!job) return;
+    let res: ImagePicker.ImagePickerResult;
+    try {
+      res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ["images"], base64: true, quality: 0.6 });
+    } catch (e) {
+      return setShotNote(`I couldn't open your photos. ${(e as Error).message}`);
+    }
+    const asset = res.assets?.[0];
+    if (res.canceled || !asset) return;
+    // The web picker gives a data URL instead of base64; both end up as plain base64 here.
+    const data = asset.base64 ?? asset.uri.split(",")[1];
+    if (!data) return setShotNote("That screenshot came through empty. Try another?");
+    setShotNote("");
+    s.dismissJob(job.id);
+    setJobId(s.digest(job.url, caption.trim() || undefined, { data, mimeType: asset.mimeType ?? "image/jpeg" }));
+  }
+
   const busy = job?.status === "digesting";
   const failed = job?.status === "failed";
   const needCaption = failed && CAPTION_CODES.includes(job?.code ?? "");
@@ -68,7 +89,7 @@ export default function Feed() {
   const say =
     job?.status === "done" ? `Mmm, ${job.title}! Let me tune it to you.`
     : busy ? "Chewing… videos take me a minute."
-    : failed ? job?.error
+    : failed ? shotNote || job?.error
     : "A little birdie says you watch food videos but never cook them. Feed me one.";
 
   return (
@@ -77,7 +98,10 @@ export default function Feed() {
       say={say}
       step={onboarding ? [3, 5] : [1, 6]}
       cta={
-        needCaption ? <Button title="Try the caption" onPress={feedCaption} disabled={!caption.trim()} />
+        needCaption ? <>
+            <Button title="Try the caption" onPress={feedCaption} disabled={!caption.trim()} />
+            <Button title="Send a screenshot instead" kind="ghost" onPress={feedScreenshot} />
+          </>
         : <>
             <Button title={failed ? "Try another link" : "Feed Pal"} onPress={failed ? () => { s.dismissJob(job!.id); setJobId(null); setUrl(""); } : feed} disabled={!failed && (!url.trim() || busy)} loading={busy} />
             {!busy && !failed && !onboarding ? <Button title="Import my Instagram saves" kind="ghost" onPress={() => router.push("/import")} /> : null}
@@ -85,7 +109,7 @@ export default function Feed() {
       }
     >
       {needCaption ? (
-        <Field value={caption} onChangeText={setCaption} placeholder="Paste the post's caption here" multiline style={{ height: 120, alignItems: "flex-start", paddingTop: 12 }} />
+        <Field value={caption} onChangeText={setCaption} placeholder="Paste the post's caption here, or send a screenshot" multiline style={{ height: 120, alignItems: "flex-start", paddingTop: 12 }} />
       ) : !failed && !busy && job?.status !== "done" ? (
         <>
           <Field value={url} onChangeText={setUrl} placeholder="Paste a TikTok, Reel or YouTube link" autoCapitalize="none" autoCorrect={false} keyboardType="url" returnKeyType="go" onSubmitEditing={feed} action="Paste" onAction={paste} />

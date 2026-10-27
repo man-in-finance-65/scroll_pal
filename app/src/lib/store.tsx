@@ -1,6 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api, ApiError } from "./api";
+import { api, ApiError, type Shot } from "./api";
 import { fx } from "./fx";
 import { plain } from "./format";
 import { fillPlan, mondayOf, pactPlan } from "./meal";
@@ -56,7 +56,7 @@ type Ctx = State & {
   celebration: Celebration | null;
   clearCelebration: () => void;
   jobs: Job[];
-  digest: (url: string, caption?: string) => string; // starts digesting and returns the job id; many can run at once
+  digest: (url: string, caption?: string, shot?: Shot) => string; // starts digesting and returns the job id; many can run at once
   dismissJob: (id: string) => void;
   saveChat: (key: string, chat: ChatSave) => void;
   clearChat: (key: string) => void;
@@ -134,10 +134,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   // Pal can chew on several links at once: each one is a job with its own status.
   const [jobs, setJobs] = useState<Job[]>([]);
-  const digest = useCallback((url: string, caption?: string) => {
+  const digest = useCallback((url: string, caption?: string, shot?: Shot) => {
     const id = newId();
     setJobs((j) => [{ id, url, caption, status: "digesting" }, ...j]);
-    api.ingest(url, caption).then(
+    api.ingest(url, caption, shot).then(
       (recipe) => {
         if (addShare(recipe)) fx.levelUp();
         else fx.ready();
