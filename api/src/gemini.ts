@@ -87,7 +87,7 @@ export async function readRecipe(
 const URL_PROMPT = `Open this link and find the recipe in it: the caption, description or recipe on that exact page.
 If you cannot open it, or it has no recipe, set confidence to 0. Never make up a recipe from the title alone.
 Reply with ONLY a JSON object, no other text, with these fields:
-title, creator, cuisine, servings (integer, at least 1), ingredients [{name, qty (number or null), unit, source}], steps [string],
+title, creator, cuisine, servings (integer, at least 1), ingredients [{name, qty (number or null), unit ("" if none), source}], steps [string],
 prep_minutes, cook_minutes, macros_per_serving {kcal, protein_g, carbs_g, fat_g, source}, confidence.`;
 
 export async function readRecipeFromUrl(url: string, opts: { model: string; timeoutMs: number }): Promise<{ recipe: Recipe; info: GeminiInfo; opened: string }> {
@@ -107,8 +107,11 @@ export async function readRecipeFromUrl(url: string, opts: { model: string; time
   if (!json) throw new Error("Gemini returned no recipe for the link");
   const opened = (res.candidates?.[0]?.urlContextMetadata?.urlMetadata ?? []).map((m) => m.urlRetrievalStatus ?? "?").join(",") || "none";
   const u = res.usageMetadata;
+  // Without a forced schema Gemini writes null for "no unit" (2 eggs). The app expects an empty unit.
+  const raw = JSON.parse(json);
+  for (const i of raw.ingredients ?? []) i.unit ??= "";
   return {
-    recipe: Recipe.parse(JSON.parse(json)),
+    recipe: Recipe.parse(raw),
     info: { model: opts.model, ms: Date.now() - t0, promptTokens: u?.promptTokenCount, outputTokens: u?.candidatesTokenCount, thoughtTokens: u?.thoughtsTokenCount, thinking: "default" },
     opened,
   };
