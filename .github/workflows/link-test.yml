@@ -21,6 +21,7 @@ jobs:
         working-directory: api
     env:
       GEMINI_API_KEY: ${{ secrets.GEMINI_TOKEN }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       MOCK_AI: "0"
     steps:
       - uses: actions/checkout@v4
@@ -30,6 +31,8 @@ jobs:
           cache: npm
           cache-dependency-path: api/package-lock.json
       - run: npm ci
+      - name: Pal's fixes for dishes that miss a goal (real AI, scored and diet checked)
+        run: npm run test:fixes
       - name: Digest links (each must pass)
         run: |
           URLS="${{ inputs.urls }}"

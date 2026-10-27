@@ -193,6 +193,7 @@ const FOODS: Food[] = [
   { title: "Cottage cheese on the side", how: "150 g of low fat cottage cheese with black pepper.", kind: "side", adds: { kcal: 108, protein_g: 18, carbs_g: 4, fat_g: 1.5 }, for: ["protein", "density"] },
   { title: "More chicken breast", how: "Cook 100 g more chicken breast per serving into the dish.", kind: "recipe", adds: { kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 }, for: ["protein", "density"] },
   { title: "Add firm tofu", how: "Cube 100 g firm tofu, brown it, and stir it into the dish.", kind: "recipe", adds: { kcal: 144, protein_g: 17, carbs_g: 2.8, fat_g: 8.7 }, for: ["protein"] },
+  { title: "Add seitan", how: "Slice 100 g seitan, sear it, and stir it into the dish.", kind: "recipe", adds: { kcal: 120, protein_g: 21, carbs_g: 4, fat_g: 2 }, for: ["protein", "density"] },
   { title: "Edamame on the side", how: "100 g shelled edamame with a pinch of salt.", kind: "side", adds: { kcal: 121, protein_g: 12, carbs_g: 9, fat_g: 5 }, for: ["protein"] },
   { title: "Stir in lentils", how: "Stir 100 g cooked lentils into the dish to bulk it up.", kind: "recipe", adds: { kcal: 116, protein_g: 9, carbs_g: 20, fat_g: 0.4 }, for: ["protein", "carbs"] },
   { title: "Top it with 2 eggs", how: "Fry or soft boil 2 eggs and put them on top.", kind: "recipe", adds: { kcal: 143, protein_g: 12.6, carbs_g: 0.7, fat_g: 9.5 }, for: ["protein", "kcal", "target"] },
@@ -215,6 +216,18 @@ function lighter(base: Macros): Food[] {
   if (base.carbs_g >= 30) {
     const cut = Math.floor(base.carbs_g * 0.5);
     out.push({ title: "Half the carbs, more veg", how: "Use half the rice, pasta or bread and fill the gap with greens or roast veg.", kind: "recipe", adds: { kcal: -cut * 4 + 30, protein_g: 1, carbs_g: -cut + 6, fat_g: 0 }, for: ["kcal", "target", "density"] });
+  }
+  // Trade half the carbs for lean protein: more protein for about the same energy. The smart fix when both are tight.
+  if (base.carbs_g >= 30) {
+    const cut = Math.floor(base.carbs_g * 0.5);
+    for (const p of [
+      { name: "shrimp", how: "100 g cooked shrimp", kcal: 99, protein_g: 24, carbs_g: 0.2, fat_g: 0.3 },
+      { name: "chicken breast", how: "100 g chicken breast", kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 },
+      { name: "firm tofu", how: "100 g firm tofu", kcal: 144, protein_g: 17, carbs_g: 2.8, fat_g: 8.7 },
+      { name: "seitan", how: "100 g seitan", kcal: 120, protein_g: 21, carbs_g: 4, fat_g: 2 },
+    ]) {
+      out.push({ title: `Half the carbs, add ${p.name}`, how: `Use half the rice, pasta or noodles and add ${p.how} per serving instead.`, kind: "recipe", adds: { kcal: -cut * 4 + p.kcal, protein_g: p.protein_g - 2, carbs_g: -cut + p.carbs_g, fat_g: p.fat_g }, for: ["protein", "density"] });
+    }
   }
   const q = { kcal: -Math.floor(base.kcal / 4), protein_g: -Math.floor(base.protein_g / 4), carbs_g: -Math.floor(base.carbs_g / 4), fat_g: -Math.floor(base.fat_g / 4) };
   out.push({ title: "Three quarters and a salad", how: "Eat three quarters of a serving with a big green salad, light dressing.", kind: "side", adds: { kcal: q.kcal + 40, protein_g: q.protein_g + 2, carbs_g: q.carbs_g + 6, fat_g: q.fat_g + 1 }, for: ["kcal", "target"] });

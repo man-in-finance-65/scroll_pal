@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "node dist/server.js",
     "typecheck": "tsc --noEmit",
-    "test:links": "tsx --env-file-if-exists=.env scripts/test-links.ts"
+    "test:links": "tsx --env-file-if-exists=.env scripts/test-links.ts",
+    "test:fixes": "tsx --env-file-if-exists=.env scripts/test-fixes.ts"
   },
   "engines": {
     "node": ">=20"
