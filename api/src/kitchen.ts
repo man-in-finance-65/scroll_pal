@@ -1,7 +1,7 @@
 // The kitchen half of Pal: goal swaps and reading a pantry photo.
 import Anthropic from "@anthropic-ai/sdk";
 import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { breaksDiet, dietWords } from "./diet.js";
 import { Recommendation, type Recipe, Swap } from "./schema.js";
@@ -319,7 +319,8 @@ export async function recommendFor(
       const res = await geminiClient().models.generateContent({
         model: process.env.GEMINI_MODEL || "gemini-flash-latest",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { responseMimeType: "application/json", responseJsonSchema: geminiSchema(RecList), temperature: 0.5, abortSignal: AbortSignal.timeout(30_000) },
+        // Light thinking: deep thinking took over 30 s here. The scoring above catches any weak idea anyway.
+        config: { responseMimeType: "application/json", responseJsonSchema: geminiSchema(RecList), temperature: 0.5, abortSignal: AbortSignal.timeout(35_000), thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
       });
       const list = keep(res.text ? RecList.parse(JSON.parse(res.text)).recommendations : []);
       if (list.length) return { recommendations: list, planner: "gemini" };
