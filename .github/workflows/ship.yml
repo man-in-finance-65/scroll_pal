@@ -122,6 +122,6 @@ jobs:
           set -o pipefail
           npx expo export --platform web
           npx -y eas-cli@latest deploy --prod --non-interactive 2>&1 | tee ../web.log
-          URL=$(grep -oE 'https://[a-z0-9.-]+\.expo\.app' ../web.log | head -n1)
+          URL=$(grep 'Production URL' ../web.log | grep -oE 'https://[^ ]+')
           echo "Web link: $URL"
           { echo "### Web version"; echo "- Link: $URL"; } >> "$GITHUB_STEP_SUMMARY"
