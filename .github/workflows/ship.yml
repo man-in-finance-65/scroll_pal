@@ -1,4 +1,4 @@
-name: Ship ScrollPal (server + app)
+name: Ship ScrollPal (server + app + web)
 
 # 1) Updates Pal's server (api/) on Cloud Run, service scrollpal-api. Signs in to Google without a key file
 #    (workload identity, set up once by scripts/connect-github.sh). The Gemini and Anthropic keys stay in Google
@@ -114,3 +114,14 @@ jobs:
             echo "- Always-latest Expo Go link: \`exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0\`"
             echo "- This update: \`exp://u.expo.dev/$PID/group/$GROUP\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      # 3) The same app as a website on Expo's hosting (EAS Hosting), pointed at the same server.
+      #    Kept separate so a web hiccup never blocks the Expo Go publish above.
+      - name: Publish the web version
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx expo export --platform web
+          npx -y eas-cli@latest deploy --prod --non-interactive 2>&1 | tee ../web.log
+          URL=$(grep -oE 'https://[a-z0-9.-]+\.expo\.app' ../web.log | head -n1)
+          echo "Web link: $URL"
+          { echo "### Web version"; echo "- Link: $URL"; } >> "$GITHUB_STEP_SUMMARY"

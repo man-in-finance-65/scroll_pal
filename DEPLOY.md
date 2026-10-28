@@ -2,7 +2,7 @@
 
 Everything deploys from GitHub (Actions), using the secrets stored on the repo. You never paste a key into a terminal.
 
-**Current way (since 2026-10-25): `Ship ScrollPal (server + app)`** (`.github/workflows/ship.yml`).
+**Current way (since 2026-10-25): `Ship ScrollPal (server + app + web)`** (`.github/workflows/ship.yml`).
 Every push to `claude/nice-thompson-6oeu73` that touches `api/` or `app/` updates the server (`scrollpal-api` on
 Cloud Run, keys stay in Secret Manager) and then publishes the app to Expo Go branch `v1` pointed at it. It signs in
 to Google with the keyless setup from `scripts/connect-github.sh` (repo variables `GCP_WIF_PROVIDER`, `GCP_SA_EMAIL`,
@@ -24,7 +24,8 @@ One React Native codebase in `app/` runs on iPhone, Android and the web.
 
 - **Try the web version locally:** `cd app && npx expo start --web`
 - **Make the web files:** `cd app && npm run build:web` (puts a ready-to-host site in `app/dist`)
-- **Host it with Expo (EAS Hosting):** `cd app && npm run deploy:web` (needs `EXPO_TOKEN`, or `npx eas-cli login` once). Set `EXPO_PUBLIC_API_URL` to the Cloud Run address first, same as for the phone app.
+- **Live web link:** every Ship run also publishes the site to Expo hosting (address like `https://scroll-pal.expo.app`, shown in the run summary).
+- **Host it with Expo (EAS Hosting) by hand:** `cd app && npm run deploy:web` (needs `EXPO_TOKEN`, or `npx eas-cli login` once). Set `EXPO_PUBLIC_API_URL` to the Cloud Run address first, same as for the phone app.
 - **Android APK (installable file):** `cd app && npx eas-cli build --platform android --profile apk`
 - On the web, phone-only extras (vibration, reminders) quietly do nothing; everything else works.
 
