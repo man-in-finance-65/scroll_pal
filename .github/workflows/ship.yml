@@ -1,0 +1,127 @@
+name: Ship ScrollPal (server + app + web)
+
+# 1) Updates Pal's server (api/) on Cloud Run, service scrollpal-api. Signs in to Google without a key file
+#    (workload identity, set up once by scripts/connect-github.sh). The Gemini and Anthropic keys stay in Google
+#    Secret Manager: an existing service keeps them; a brand new one is given them from the stored secrets.
+# 2) Publishes the app (app/) to Expo Go, branch + channel v1, pointed at that server.
+# Runs on every push to this branch that touches api/ or app/, or by hand (Actions -> Run workflow).
+on:
+  push:
+    branches: [claude/nice-thompson-6oeu73]
+    paths: ["api/**", "app/**", ".github/workflows/ship.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  REGION: us-central1
+  SERVICE: scrollpal-api
+
+jobs:
+  server:
+    runs-on: ubuntu-latest
+    outputs:
+      url: ${{ steps.addr.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: api/package-lock.json }
+      - run: npm ci && npx tsc --noEmit
+        working-directory: api
+      - name: Check the Google settings exist
+        run: |
+          [ -n "${{ vars.GCP_WIF_PROVIDER }}" ] && [ -n "${{ vars.GCP_SA_EMAIL }}" ] && [ -n "${{ vars.GCP_PROJECT_ID }}" ] \
+            || { echo "::error::GCP_WIF_PROVIDER, GCP_SA_EMAIL or GCP_PROJECT_ID is missing. Run scripts/connect-github.sh once (see DEPLOY.md)."; exit 1; }
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SA_EMAIL }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Deploy
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          if gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" >/dev/null 2>&1; then
+            echo "Updating $SERVICE (keeps its keys and settings)"
+            gcloud run deploy "$SERVICE" --project "$PROJECT" --source api --region "$REGION" --quiet
+          else
+            # First deploy: attach whichever stored keys exist.
+            SECRETS=""
+            for pair in GEMINI_API_KEY=pal-gemini-key ANTHROPIC_API_KEY=pal-anthropic-key; do
+              name="${pair#*=}"
+              if gcloud secrets describe "$name" --project "$PROJECT" >/dev/null 2>&1; then SECRETS="$SECRETS${SECRETS:+,}${pair%%=*}=$name:latest"; echo "Using stored secret $name"
+              else echo "::warning::Secret $name not found in Secret Manager"; fi
+            done
+            gcloud run deploy "$SERVICE" --project "$PROJECT" --source api --region "$REGION" --allow-unauthenticated \
+              --timeout 300 --max-instances 2 --set-env-vars MOCK_AI=0 ${SECRETS:+--set-secrets "$SECRETS"} --quiet
+          fi
+      - name: Address and health check
+        id: addr
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          URL=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format 'value(status.url)')
+          echo "url=$URL" >> "$GITHUB_OUTPUT"
+          HEALTH=$(curl -fsS "$URL/health")
+          echo "$HEALTH"
+          echo "$HEALTH" | grep -q '"mock":false' || echo "::warning::The server is in mock mode."
+          # The new endpoints answer (400 = they exist and want a proper body).
+          for p in swaps pantry; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' -X POST -H 'content-type: application/json' -d '{}' "$URL/v1/$p")
+            echo "/v1/$p -> $code"; [ "$code" = "400" ] || { echo "::error::/v1/$p is not live (HTTP $code)"; exit 1; }
+          done
+          KEYS=$(gcloud run services describe "$SERVICE" --project "$PROJECT" --region "$REGION" --format json | node -e '
+            const s = JSON.parse(require("fs").readFileSync(0, "utf8"));
+            const env = s.spec.template.spec.containers[0].env || [];
+            console.log(["GEMINI_API_KEY", "ANTHROPIC_API_KEY"].map((k) => `${k}: ${env.some((e) => e.name === k) ? "set" : "MISSING"}`).join(", "));')
+          echo "$KEYS"
+          { echo "### Server live"; echo "- Address and landing page: $URL"; echo "- Keys: $KEYS"; } >> "$GITHUB_STEP_SUMMARY"
+
+  app:
+    needs: server
+    runs-on: ubuntu-latest
+    defaults:
+      run: { working-directory: app }
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+      EXPO_PUBLIC_API_URL: ${{ needs.server.outputs.url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: app/package-lock.json }
+      - run: npm ci && npx tsc --noEmit && npm test
+      - run: '[ -n "$EXPO_TOKEN" ] || { echo "::error::EXPO_TOKEN secret is missing"; exit 1; }'
+      - run: npx -y eas-cli@latest init --non-interactive --force
+      - run: npx -y eas-cli@latest channel:create v1 --non-interactive || echo "channel v1 already exists"
+      - name: Publish to Expo Go (branch v1)
+        env:
+          # Passed through env, never pasted into the command: quotes in a commit message broke it once.
+          COMMIT_MSG: ${{ github.event.head_commit.message || 'manual publish' }}
+        run: |
+          set -o pipefail
+          npx -y eas-cli@latest update --branch v1 --message "$(printf %s "$COMMIT_MSG" | head -n1 | cut -c1-100)" --non-interactive --json | tee ../update.json
+      - name: Links for Expo Go
+        run: |
+          PID=$(node -p 'require("./app.json").expo.extra.eas.projectId')
+          GROUP=$(node -e 'const u=require("../update.json");console.log((Array.isArray(u)?u:[u])[0]?.group||"")')
+          echo "Always latest: exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0"
+          echo "This update: exp://u.expo.dev/$PID/group/$GROUP"
+          {
+            echo "### App published"
+            echo "- Server: $EXPO_PUBLIC_API_URL"
+            echo "- Always-latest Expo Go link: \`exp://u.expo.dev/$PID?channel-name=v1&runtime-version=exposdk:58.0.0\`"
+            echo "- This update: \`exp://u.expo.dev/$PID/group/$GROUP\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+      # 3) The same app as a website on Expo's hosting (EAS Hosting), pointed at the same server.
+      #    Kept separate so a web hiccup never blocks the Expo Go publish above.
+      - name: Publish the web version
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          npx expo export --platform web
+          npx -y eas-cli@latest deploy --prod --non-interactive 2>&1 | tee ../web.log
+          URL=$(grep 'Production URL' ../web.log | grep -oE 'https://[^ ]+')
+          echo "Web link: $URL"
+          { echo "### Web version"; echo "- Link: $URL"; } >> "$GITHUB_STEP_SUMMARY"

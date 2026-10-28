@@ -1,0 +1,63 @@
+import type { CheckRow } from "./goals";
+import type { CookStep, DietId, Goal, Recipe, Recommendation, Swap } from "./types";
+
+// In a published app there is no fallback: if the server address is missing, say so plainly.
+const BASE = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http://localhost:8080" : "")).replace(/\/$/, "");
+
+export type Shot = { data: string; mimeType: string };
+
+export class ApiError extends Error {
+  constructor(public code: string, message: string, public detail?: string) {
+    super(message);
+  }
+}
+
+async function post<T>(path: string, body: unknown, timeoutMs = 150_000): Promise<T> {
+  if (!BASE) throw new ApiError("no_server", "I'm not connected to my server yet. Whoever set up this app needs to finish deploying it.");
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(BASE + path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch {
+    throw new ApiError("offline", "I can't reach my server. Check your connection and try again.");
+  } finally {
+    clearTimeout(timer);
+  }
+  if (res.status === 204) return undefined as T;
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error ?? "server_error", data.message ?? "Something went wrong. Try again.", data.detail);
+  return data as T;
+}
+
+export const api = {
+  // shot: a screenshot of the post's caption, for when the text can't be copied.
+  ingest: (url: string, caption?: string, shot?: Shot) => post<Recipe & { cached?: boolean }>("/v1/ingest", { url, caption, shot }),
+  // Pal tunes the recipe to your goal: ingredient swaps, each with the energy it saves per serving.
+  swaps: (recipe: Recipe, goal: Goal, mealKcal: number | null, diet: DietId[]) => post<{ swaps: Swap[]; planner: string }>("/v1/swaps", { recipe, goal, mealKcal, diet }),
+  // The dish does not fit the goal: fixes for what it misses, scored on every check (rows), never against the diet.
+  recommend: (recipe: Recipe, goal: Goal, mealKcal: number | null, kcalAfter: number, rows: CheckRow[], diet: DietId[]) =>
+    post<{ recommendations: Recommendation[]; planner: string }>("/v1/recommend", {
+      recipe, goal, mealKcal, kcalAfter, diet,
+      misses: rows.filter((r) => !r.pass).map((r) => `${r.label}: ${r.math}`),
+      checks: rows.map(({ id, label, value, lo, hi, pass }) => ({ id, label, value, lo, hi, pass })),
+    }, 60_000),
+  // Pal's sous chef works the fixes you picked into the cooking steps, with how to cook each one.
+  steps: (recipe: Recipe, picks: Recommendation[], swaps: { from: string; to: string }[]) =>
+    post<{ steps: CookStep[]; planner: string }>("/v1/steps", { recipe, picks, swaps }, 45_000),
+  // A photo of your shelves: which of the recipe's ingredients Pal can see.
+  pantry: (imageBase64: string, mimeType: string, ingredients: string[]) =>
+    post<{ have: string[] }>("/v1/pantry", { image: imageBase64, mimeType, ingredients }, 90_000),
+  // One row per answer in the team sheet. Anonymous: a random device id, no name, no email.
+  feedback: (body: { device: string; milestone: number; level: number; cooks: number; id: string; q: string; a: string }) =>
+    post<void>("/v1/feedback", body, 15_000),
+  // Fire-and-forget: counting taps must never block or break the app.
+  event: (type: "share" | "plan" | "done" | "eat" | "skip", device: string, ref?: string) => {
+    post("/v1/event", { type, device, ref: ref?.slice(0, 200) }, 8000).catch(() => {});
+  },
+};

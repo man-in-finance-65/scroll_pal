@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "ScrollPal",
+    "slug": "scroll-pal",
+    "scheme": "scrollpal",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "app.scrollpal"
+    },
+    "android": {
+      "package": "app.scrollpal",
+      "adaptiveIcon": {
+        "backgroundColor": "#090A0F",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-notifications",
+        {
+          "color": "#6C5CE7"
+        }
+      ],
+      "expo-audio",
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Pal looks at your shelves to see what you already have.",
+          "photosPermission": "Pal looks at a photo of your shelves to see what you already have."
+        }
+      ],
+      "expo-document-picker"
+    ],
+    "experiments": {
+      "typedRoutes": false
+    },
+    "runtimeVersion": {
+      "policy": "sdkVersion"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "79b48e89-9dc9-4e6f-9e1a-183307fbc025"
+      }
+    },
+    "backgroundColor": "#090A0F"
+  }
+}
