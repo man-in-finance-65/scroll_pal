@@ -1,5 +1,5 @@
 import type { CheckRow } from "./goals";
-import type { DietId, Goal, Recipe, Recommendation, Swap } from "./types";
+import type { CookStep, DietId, Goal, Recipe, Recommendation, Swap } from "./types";
 
 // In a published app there is no fallback: if the server address is missing, say so plainly.
 const BASE = (process.env.EXPO_PUBLIC_API_URL || (__DEV__ ? "http://localhost:8080" : "")).replace(/\/$/, "");
@@ -47,6 +47,9 @@ export const api = {
       misses: rows.filter((r) => !r.pass).map((r) => `${r.label}: ${r.math}`),
       checks: rows.map(({ id, label, value, lo, hi, pass }) => ({ id, label, value, lo, hi, pass })),
     }, 60_000),
+  // Pal's sous chef works the fixes you picked into the cooking steps, with how to cook each one.
+  steps: (recipe: Recipe, picks: Recommendation[], swaps: { from: string; to: string }[]) =>
+    post<{ steps: CookStep[]; planner: string }>("/v1/steps", { recipe, picks, swaps }, 45_000),
   // A photo of your shelves: which of the recipe's ingredients Pal can see.
   pantry: (imageBase64: string, mimeType: string, ingredients: string[]) =>
     post<{ have: string[] }>("/v1/pantry", { image: imageBase64, mimeType, ingredients }, 90_000),

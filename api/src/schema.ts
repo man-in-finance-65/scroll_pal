@@ -135,3 +135,13 @@ export const RecommendBody = z.object({
   checks: z.array(z.object({ id: z.string().max(20), label: z.string().max(60), value: z.number(), lo: z.number().nullable(), hi: z.number().nullable(), pass: z.boolean() })).max(10).optional(),
   diet: Diet.optional(),
 });
+
+// Pal works the fixes you picked into the cooking steps. swaps: ingredient changes Pal already made ("to" for "from").
+export const StepsBody = z.object({
+  recipe: Recipe,
+  picks: z.array(Recommendation).min(1).max(5),
+  swaps: z.array(z.object({ from: z.string().max(120), to: z.string().max(120) })).max(6).optional(),
+});
+
+// One cooking step. pal = Pal added or changed it for your picks.
+export const CookStep = z.object({ text: z.string(), pal: z.boolean() });

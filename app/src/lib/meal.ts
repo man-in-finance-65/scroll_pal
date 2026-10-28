@@ -1,6 +1,6 @@
 import { num } from "./format";
 import { judge, type Verdict } from "./goals";
-import type { Body, Goal, Pact, Plan, PlanSlot, Recipe, Recommendation, Swap } from "./types";
+import type { Body, CookStep, Goal, Meal, Pact, Plan, PlanSlot, Recipe, Recommendation, Swap } from "./types";
 import { localDay } from "./xp";
 
 // Your energy target per meal, from your body and goal. A simple rule of thumb, so it is marked "~" everywhere:
@@ -183,4 +183,17 @@ export function fixMath(x: Recommendation, recipe: Recipe, kcalNow: number): str
   if (x.fixes === "carbs" && a.carbs_g !== 0) parts.push(line(m.carbs_g, a.carbs_g, " g", "carbs"));
   if (x.fixes === "fat" && a.fat_g !== 0) parts.push(line(m.fat_g, a.fat_g, " g", "fat"));
   return parts.join(" · ");
+}
+
+// The fixes you picked for this meal (older saves kept a single pick).
+export const picksOf = (meal: Meal): Recommendation[] => meal.tweaks ?? (meal.tweak ? [meal.tweak] : []);
+
+// Which picks and swaps a set of cooking steps was made for. New picks = new steps.
+export const stepsKey = (meal: Meal) => [...picksOf(meal).map((p) => p.title), ...meal.swaps.map((x) => `${x.from}>${x.to}`)].join("|");
+
+// The steps without Pal's sous chef (no connection): each pick's own instructions go in just before the last step.
+export function plainSteps(recipe: Recipe, picks: Recommendation[]): CookStep[] {
+  const steps = recipe.steps.map((text) => ({ text, pal: false }));
+  const extra = picks.map((p) => ({ text: p.how, pal: true }));
+  return steps.length ? [...steps.slice(0, -1), ...extra, steps[steps.length - 1]] : extra;
 }

@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, ApiError, type Shot } from "./api";
 import { fx } from "./fx";
 import { plain } from "./format";
-import { fillPlan, mondayOf, pactPlan, planWith } from "./meal";
+import { fillPlan, mondayOf, pactPlan, picksOf, plainSteps, planWith, stepsKey } from "./meal";
 import type { Body, ChatSave, CookLog, DietId, Goal, Job, Meal, MealStage, Plan, Recipe, Recommendation, Stamp, Swap } from "./types";
 import { computeProgress, xpMath, type Progress, type XpEvent } from "./xp";
 
@@ -72,6 +72,7 @@ type Ctx = State & {
   setSwaps: (swaps: Swap[]) => void;
   setHave: (have: string[]) => void;
   setTweaks: (tweaks: Recommendation[]) => void;
+  prepareSteps: () => void; // asks Pal's sous chef to work your picks into the steps (once per set of picks)
   addMealToPlan: () => void; // puts the meal you're on (with your picked fixes) into this week's plan
   setOrderUrl: (url: string) => void;
   setStage: (stage: MealStage) => void;
@@ -177,6 +178,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const current = s.pactWeek === mondayOf() ? s.plan : null;
     return { ...s, meal: null, pactWeek: mondayOf(), plan: planWith(current, s.meal.recipe, s.meal.tweaks ?? [], s.goal) };
   }), [update]);
+  const asked = useRef(new Set<string>());
+  const prepareSteps = useCallback(() => {
+    const meal = stateRef.current.meal;
+    if (!meal) return;
+    const picks = picksOf(meal);
+    const key = stepsKey(meal);
+    if (!picks.length || meal.cookSteps?.key === key || asked.current.has(meal.id + key)) return;
+    asked.current.add(meal.id + key);
+    const save = (steps: { text: string; pal: boolean }[]) =>
+      update((s) => (s.meal?.id === meal.id ? { ...s, meal: { ...s.meal, cookSteps: { key, steps: steps.map((x) => ({ ...x, text: plain(x.text) })) } } } : s));
+    api.steps(meal.recipe, picks, meal.swaps.map(({ from, to }) => ({ from, to }))).then(
+      (r) => save(r.steps),
+      () => save(plainSteps(meal.recipe, picks)),
+    );
+  }, [update]);
   const setHave = useCallback((have: string[]) => setMeal((m) => ({ ...m, have })), [setMeal]);
   const setOrderUrl = useCallback((orderUrl: string) => setMeal((m) => ({ ...m, orderUrl })), [setMeal]);
   const setStage = useCallback((stage: MealStage) => setMeal((m) => ({ ...m, stage })), [setMeal]);
@@ -252,7 +268,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, openRecipe,
-    setName, setGoal, setDiet, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweaks, addMealToPlan, setOrderUrl, setStage, cookMeal, eatMeal,
+    setName, setGoal, setDiet, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweaks, prepareSteps, addMealToPlan, setOrderUrl, setStage, cookMeal, eatMeal,
     makePact, skipSlot, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

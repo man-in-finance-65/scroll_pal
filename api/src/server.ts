@@ -4,10 +4,10 @@ import { fileURLToPath } from "node:url";
 import { buildPlan, planPrompt } from "./claude.js";
 import { planWithGemini } from "./gemini.js";
 import { IngestError, ingest } from "./ingest.js";
-import { KitchenError, readPantry, recommendFor, swapsFor } from "./kitchen.js";
+import { KitchenError, readPantry, recommendFor, stepsFor, swapsFor } from "./kitchen.js";
 import { limit } from "./limit.js";
 import { mockPlan, simplePlan } from "./mock.js";
-import { EventBody, FeedbackBody, IngestBody, PalBody, PantryBody, PlanBody, RecommendBody, SwapsBody } from "./schema.js";
+import { EventBody, FeedbackBody, IngestBody, PalBody, PantryBody, PlanBody, RecommendBody, StepsBody, SwapsBody } from "./schema.js";
 import { sheetTime, toSheet } from "./sheet.js";
 
 const app = express();
@@ -94,6 +94,19 @@ app.post("/v1/swaps", limit(60), async (req: Request, res: Response) => {
     res.json(out);
   } catch (e) {
     kitchenFail(res, e, "swaps");
+  }
+});
+
+// The fixes you picked, worked into the cooking steps by Pal's sous chef. Never fails: plain rules answer without AI.
+app.post("/v1/steps", limit(60), async (req: Request, res: Response) => {
+  const body = StepsBody.safeParse(req.body);
+  if (!body.success) return bad(res, "Send {recipe, picks, swaps?}.");
+  try {
+    const out = await stepsFor(body.data.recipe, body.data.picks, body.data.swaps ?? []);
+    if (out.note) console.warn(`steps: ${out.planner} used. ${out.note}`);
+    res.json(out);
+  } catch (e) {
+    kitchenFail(res, e, "steps");
   }
 });
 

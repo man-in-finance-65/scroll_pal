@@ -66,7 +66,8 @@ export default function Swaps() {
   }
   if (error && !loading) say = `${error} ${say}`;
 
-  const goPantry = () => { s.setStage("pantry"); router.push("/meal/pantry"); };
+  // Pal's sous chef starts working your picks into the steps now, so they're ready by the time you cook.
+  const goPantry = () => { s.setStage("pantry"); s.prepareSteps(); router.push("/meal/pantry"); };
   const addToPlan = () => { s.addMealToPlan(); router.replace("/plan"); };
 
   return (

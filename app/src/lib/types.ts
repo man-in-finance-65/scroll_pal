@@ -65,6 +65,9 @@ export type Recommendation = { title: string; how: string; kcal: number | null; 
 export type DietId = "vegetarian" | "vegan" | "no_dairy" | "no_eggs" | "gluten_free" | "no_pork" | "no_nuts" | "no_shellfish";
 
 // The meal you're on right now, from the link to the plate.
+// One cooking step. pal = Pal added or changed it so you cook your picked fixes too.
+export type CookStep = { text: string; pal: boolean };
+
 export type MealStage = "swaps" | "pantry" | "shop" | "wait" | "cook" | "eat" | "done";
 export type Meal = {
   id: string;
@@ -74,6 +77,7 @@ export type Meal = {
   tweaks?: Recommendation[]; // the fixes you picked for a dish that did not fit
   tweak?: Recommendation; // older single pick, still read by the cook screen
   orderUrl?: string; // the store cart you shopped in, to reopen it while you wait
+  cookSteps?: { key: string; steps: CookStep[] }; // the steps with your picks worked in; key = which picks they were made for
   stage: MealStage;
   slotId?: string; // the plan slot this meal fills, if any
   cookedAt?: string;

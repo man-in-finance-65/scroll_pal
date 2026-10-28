@@ -4,7 +4,7 @@ import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { z } from "zod";
 import { breaksDiet, dietWords } from "./diet.js";
-import { Recommendation, type Recipe, Swap } from "./schema.js";
+import { CookStep, Recommendation, type Recipe, Swap } from "./schema.js";
 
 type Goal = "bulk" | "cut" | "maintain";
 type SwapT = z.infer<typeof Swap>;
@@ -339,4 +339,76 @@ export async function recommendFor(
     }
   }
   return { recommendations: ruleRecs(base, checks, diet), planner: "built-in", note: tried.join(" | ") || undefined };
+}
+
+// ---------- Cooking steps with your picks (Pal's sous chef) ----------
+// The fixes you picked become real steps, at the right moment, with how a good cook does it: amount, heat, time and
+// how to tell it's done. Never fails: without AI, each pick's own instructions go in just before the last step.
+
+type Step = z.infer<typeof CookStep>;
+// No length limits in the schema itself (not every AI accepts them): ok() below checks the answer instead.
+const StepList = z.object({ steps: z.array(CookStep) });
+
+export function plainSteps(recipe: Recipe, picks: Rec[]): Step[] {
+  const steps = recipe.steps.map((text) => ({ text, pal: false }));
+  const extra = picks.map((p) => ({ text: p.how, pal: true }));
+  return steps.length ? [...steps.slice(0, -1), ...extra, steps[steps.length - 1]] : extra;
+}
+
+function stepsPrompt(recipe: Recipe, picks: Rec[], swaps: { from: string; to: string }[]) {
+  return (
+    `Dish: ${recipe.title} (${recipe.cuisine}), serves ${recipe.servings}.\n` +
+    `Ingredients: ${recipe.ingredients.map((i) => `${i.name} (${i.qty ?? "?"} ${i.unit})`).join("; ")}.\n` +
+    `Steps now:\n${recipe.steps.map((x, k) => `${k + 1}. ${x}`).join("\n")}\n` +
+    (swaps.length ? `Ingredient swaps already made: ${swaps.map((x) => `${x.to} instead of ${x.from}`).join("; ")}.\n` : "") +
+    `The cook chose these changes:\n${picks.map((p) => `- ${p.title}: ${p.how}`).join("\n")}\n\n` +
+    `Rewrite the steps so the cook makes the dish WITH these changes, like a sous chef guiding a home cook. ` +
+    `Keep the original steps in order, worded as they are unless a change affects them. Add the steps each change needs at the right moment: ` +
+    `start long jobs early so things finish together (poach the chicken while the potatoes boil). ` +
+    `Every added step is specific: the amount, the heat, the time, and how to tell it's done (chicken cooked through with no pink inside, eggs just set). ` +
+    `Use the best simple technique for each ingredient. Mark added or changed steps pal true, untouched steps pal false. ` +
+    `At most 14 steps, each under 35 words. Never use hyphens or dashes: write "5 to 6 minutes".`
+  );
+}
+
+export async function stepsFor(recipe: Recipe, picks: Rec[], swaps: { from: string; to: string }[] = []): Promise<{ steps: Step[]; planner: string; note?: string }> {
+  if (mock()) {
+    await sleep(500);
+    return { steps: plainSteps(recipe, picks), planner: "mock" };
+  }
+  const tried: string[] = [];
+  const prompt = stepsPrompt(recipe, picks, swaps);
+  // A rewrite that drops steps or adds nothing for the picks is not trusted.
+  const ok = (list: Step[]) => list.length >= Math.min(recipe.steps.length, 14) && list.length <= 16 && list.some((x) => x.pal);
+  if (process.env.ANTHROPIC_API_KEY) {
+    try {
+      const msg = await (anthropic ??= new Anthropic()).messages.parse({
+        model: process.env.CLAUDE_MODEL || "claude-haiku-5-5",
+        max_tokens: 2000,
+        system: "You are Pal's sous chef: a calm, precise professional cook who teaches home cooks the best simple technique.",
+        messages: [{ role: "user", content: prompt }],
+        output_config: { format: zodOutputFormat(StepList) },
+      });
+      const list = msg.parsed_output?.steps ?? [];
+      if (ok(list)) return { steps: list, planner: "claude" };
+      tried.push("claude: the steps did not hold up");
+    } catch (e) {
+      tried.push(`claude: ${clean(e)}`);
+    }
+  }
+  if (process.env.GEMINI_API_KEY) {
+    try {
+      const res = await geminiClient().models.generateContent({
+        model: process.env.GEMINI_MODEL || "gemini-flash-latest",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { responseMimeType: "application/json", responseJsonSchema: geminiSchema(StepList), temperature: 0.3, abortSignal: AbortSignal.timeout(35_000), thinkingConfig: { thinkingLevel: ThinkingLevel.LOW } },
+      });
+      const list = res.text ? StepList.parse(JSON.parse(res.text)).steps : [];
+      if (ok(list)) return { steps: list, planner: "gemini" };
+      tried.push("gemini: the steps did not hold up");
+    } catch (e) {
+      tried.push(`gemini: ${clean(e)}`);
+    }
+  }
+  return { steps: plainSteps(recipe, picks), planner: "built-in", note: tried.join(" | ") || undefined };
 }
