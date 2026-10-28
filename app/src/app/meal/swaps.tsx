@@ -50,6 +50,8 @@ export default function Swaps() {
   const saved = m.kcal - fit.kcal;
   const picks = meal.tweaks ?? [];
   const picked = (x: Recommendation) => picks.some((p) => p.title === x.title);
+  const needs = needsOf(fit.verdict.rows, fit.verdict.estimated);
+  const needKeys = needs.map((n) => n.key);
   const toggle = (x: Recommendation) => s.setTweaks(picked(x) ? picks.filter((p) => p.title !== x.title) : [...picks, x]);
 
   let mood: PalMood;
@@ -60,7 +62,7 @@ export default function Swaps() {
     say = meal.swaps.length ? `I tuned ${r.title}. Now it fits our goal!` : `${r.title} already fits our goal. Let's cook it!`;
   } else {
     mood = fit.level === "close" ? "cheeky" : "worried";
-    say = "Here's how I'd make it fit. Pick any you like.";
+    say = "Here's what I'd do. Pick any you like.";
   }
   if (error && !loading) say = `${error} ${say}`;
 
@@ -86,21 +88,35 @@ export default function Swaps() {
     >
       {!loading && (
         <>
+          <Card style={{ alignItems: "center" }}>
+            <Text style={[type.title, { color: fit.level === "good" ? brand.mint : t.danger, textAlign: "center" }]}>
+              {fit.level === "good" ? "✓ This fits your goals" : "✗ This doesn't fit your goals"}
+            </Text>
+          </Card>
+
           {needsRecs ? (
             <>
-              <Text style={[type.label, { color: t.tint }]}>What to do · pick any</Text>
-              {recs?.id !== meal.id ? <Text style={[type.caption, { color: t.sub }]}>Thinking of fixes…</Text> : null}
+              <Text style={[type.label, { color: t.tint }]}>What I recommend · pick any</Text>
+              {needs.map((n, k) => {
+                const mine = recs?.id === meal.id ? recs.list.filter((x) => (needKeys.includes(needOf(x.fixes)) ? needOf(x.fixes) : needs[0].key) === n.key) : [];
+                return (
+                  <View key={n.key} style={{ gap: space.sm }}>
+                    <Text style={[type.h2, { color: t.text }]}>{n.text}</Text>
+                    {k === 0 && recs?.id !== meal.id ? <Text style={[type.caption, { color: t.sub }]}>Thinking of fixes…</Text> : null}
+                    {mine.map((x) => (
+                      <Choice
+                        key={x.title}
+                        icon={x.kind === "side" ? "🥣" : x.kind === "recipe" ? "🍳" : undefined}
+                        title={x.title}
+                        sub={gain(x) || undefined}
+                        selected={picked(x)}
+                        onPress={() => toggle(x)}
+                      />
+                    ))}
+                  </View>
+                );
+              })}
               {recs?.id === meal.id && recs.list.length === 0 ? <Text style={[type.caption, { color: t.sub }]}>I couldn't think of fixes just now. You can still cook it as it is.</Text> : null}
-              {recs?.id === meal.id ? recs.list.map((x) => (
-                <Choice
-                  key={x.title}
-                  icon={x.kind === "side" ? "🥣" : x.kind === "recipe" ? "🍳" : undefined}
-                  title={x.title}
-                  sub={gain(x) || undefined}
-                  selected={picked(x)}
-                  onPress={() => toggle(x)}
-                />
-              )) : null}
             </>
           ) : null}
 
@@ -168,6 +184,36 @@ const bound = (row: CheckRow) =>
 // How far a miss is from its target: "add 21 g" or "cut 2 g".
 const short = (row: CheckRow) =>
   row.lo !== null && row.value < row.lo ? `add ${amount(row, row.lo - row.value)}` : row.hi !== null && row.value > row.hi ? `cut ${amount(row, row.value - row.hi)}` : "";
+
+// Protein and protein density are one need (more protein), and so are energy and your meal target (the size).
+const needOf = (id?: string) => (id === "density" ? "protein" : id === "target" ? "kcal" : id ?? "");
+const gapOf = (row: CheckRow) => (row.lo !== null && row.value < row.lo ? row.lo - row.value : row.hi !== null && row.value > row.hi ? row.value - row.hi : 0);
+
+// What the dish needs, in plain words, one line per need: "You need ~21 g more protein".
+function needsOf(rows: CheckRow[], estimated: boolean): { key: string; text: string }[] {
+  const byNeed = new Map<string, CheckRow>();
+  for (const row of rows) {
+    if (row.pass) continue;
+    const key = needOf(row.id);
+    const have = byNeed.get(key);
+    // Protein says it best in grams; for size, the bigger of the two gaps.
+    if (!have || row.id === "protein" || (key === "kcal" && gapOf(row) > gapOf(have))) byNeed.set(key, row);
+  }
+  return [...byNeed].map(([key, row]) => {
+    const g = gapOf(row);
+    const more = row.lo !== null && row.value < row.lo;
+    const n = (d = 1) => `${estimated ? "~" : ""}${num(g, d)}`;
+    const text =
+      row.id === "protein" ? `You need ${n()} g more protein`
+      : row.id === "density" ? "You need more protein for these calories"
+      : row.id === "fat" ? `You need ${n()} g less fat`
+      : row.id === "carbs" ? `You need ${n()} g more carbs`
+      : row.id === "kcal" || row.id === "target" ? `You need ${n(0)} ${more ? "more" : "fewer"} calories`
+      : row.id === "time" ? `It takes ${num(g, 0)} min longer than you want`
+      : row.label;
+    return { key, text };
+  });
+}
 
 // What a fix does, in one line: "adds ~24 g protein", "cuts ~120 kcal".
 function gain(x: Recommendation): string {

@@ -211,7 +211,7 @@ function lighter(base: Macros): Food[] {
   const out: Food[] = [];
   if (base.fat_g >= 10) {
     const cut = Math.floor(base.fat_g * 0.4);
-    out.push({ title: "Use half the fat", how: "Halve the oil, butter and cheese, and grill, bake or air fry instead of frying.", kind: "recipe", adds: { kcal: -cut * 9, protein_g: 0, carbs_g: 0, fat_g: -cut }, for: ["kcal", "target", "fat", "density"] });
+    out.push({ title: "Halve the oil, butter and cheese", how: "Grill, bake or air fry instead of frying.", kind: "recipe", adds: { kcal: -cut * 9, protein_g: 0, carbs_g: 0, fat_g: -cut }, for: ["kcal", "target", "fat", "density"] });
   }
   if (base.carbs_g >= 30) {
     const cut = Math.floor(base.carbs_g * 0.5);
@@ -255,10 +255,19 @@ export function ruleRecs(base: Macros, checks: Check[], diet: string[]): Rec[] {
   const missing = new Set(checks.filter((c) => !c.pass).map((c) => c.id));
   const pool = [...FOODS, ...lighter(base), PREP].filter((f) => f.for.some((id) => missing.has(id)));
   const recs: Rec[] = pool.map((f) => ({ title: f.title, how: f.how, kind: f.kind, fixes: f.for.find((id) => missing.has(id))!, adds: f.adds, kcal: null, source: "estimated" }));
-  // Best first, but no more than 2 of the same kind, so there is always a choice between changing the dish and a side.
-  const ranked = rankFixes(recs, base, checks, diet);
+  return spread(rankFixes(recs, base, checks, diet));
+}
+
+// Protein and protein density are one need (more protein), and so are energy and your meal target (the size).
+export const needOf = (id: string) => (id === "density" ? "protein" : id === "target" ? "kcal" : id);
+
+// Up to 3 fixes, best first, but the best one for each need comes before a second one for the same need,
+// so a dish low in protein AND high in fat gets a fix for each.
+export function spread(ranked: Rec[], max = 3): Rec[] {
   const picked: Rec[] = [];
-  for (const r of ranked) if (picked.filter((p) => p.kind === r.kind).length < 2 && picked.length < 3) picked.push(r);
+  const needs = new Set<string>();
+  for (const r of ranked) if (picked.length < max && !needs.has(needOf(r.fixes))) { picked.push(r); needs.add(needOf(r.fixes)); }
+  for (const r of ranked) if (picked.length < max && !picked.includes(r)) picked.push(r);
   return picked;
 }
 
@@ -272,7 +281,7 @@ function recPrompt(recipe: Recipe, goal: Goal, base: Macros, checks: Check[], di
     `Ingredients: ${recipe.ingredients.map((i) => `${i.name} (${i.qty ?? "?"} ${i.unit})`).join("; ")}.\n` +
     `Checks it MISSES (fix these):\n${misses}\nChecks it passes (do NOT break these):\n${keep || "- none"}\n` +
     (diet.length ? `The user NEVER eats: ${dietWords(diet)}. Never suggest anything that breaks this.\n` : "") +
-    `Give 4 smart fixes, best first. A smart fix closes the biggest gap without breaking a check that passes: ` +
+    `Give 4 smart fixes, best first, with at least one for each check it misses. A smart fix closes the biggest gap without breaking a check that passes: ` +
     `on a cut, add protein that costs few calories (egg whites, shrimp, Greek yogurt, tuna), not fatty protein; when energy is too high, change the dish (less oil, fewer carbs, smaller portion). ` +
     `Mix kinds: "recipe" changes the dish itself (name the exact ingredient and amount per serving), "side" goes next to it. Match the dish's cuisine so it still tastes right.\n` +
     `fixes = the id of the check it targets. adds = what it changes PER SERVING in kcal, protein_g, carbs_g, fat_g (negative when it removes). ` +
@@ -297,7 +306,7 @@ export async function recommendFor(
   const tried: string[] = [];
   const prompt = recPrompt(recipe, goal, base, checks, diet);
   // The AI's fixes go through the same scoring and diet check as the rules. If none survive, the rules answer.
-  const keep = (list: Rec[]) => rankFixes(list, base, checks, diet).slice(0, 3);
+  const keep = (list: Rec[]) => spread(rankFixes(list, base, checks, diet));
   if (process.env.ANTHROPIC_API_KEY) {
     try {
       const msg = await (anthropic ??= new Anthropic()).messages.parse({
