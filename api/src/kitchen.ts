@@ -361,7 +361,7 @@ function stepsPrompt(recipe: Recipe, picks: Rec[], swaps: { from: string; to: st
     `Ingredients: ${recipe.ingredients.map((i) => `${i.name} (${i.qty ?? "?"} ${i.unit})`).join("; ")}.\n` +
     `Steps now:\n${recipe.steps.map((x, k) => `${k + 1}. ${x}`).join("\n")}\n` +
     (swaps.length ? `Ingredient swaps already made: ${swaps.map((x) => `${x.to} instead of ${x.from}`).join("; ")}.\n` : "") +
-    `The cook chose these changes:\n${picks.map((p) => `- ${p.title}: ${p.how}`).join("\n")}\n\n` +
+    `The cook chose these changes (amounts are PER SERVING; the dish serves ${recipe.servings}, so scale them to the whole dish, e.g. 100 g per serving = ${100 * recipe.servings} g):\n${picks.map((p) => `- ${p.title}: ${p.how}`).join("\n")}\n\n` +
     `Rewrite the steps so the cook makes the dish WITH these changes, like a sous chef guiding a home cook. ` +
     `Keep the original steps in order, worded as they are unless a change affects them. Add the steps each change needs at the right moment: ` +
     `start long jobs early so things finish together (poach the chicken while the potatoes boil). ` +
