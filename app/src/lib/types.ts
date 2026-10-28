@@ -32,6 +32,7 @@ export type PlanSlot = {
   note: string;
   status: SlotStatus;
   recipeTitle?: string; // which of your recipes this cook is (Kitchen Pact plans)
+  tweaks?: Recommendation[]; // Pal's fixes you picked when you added it to the plan
 };
 
 export type Plan = {
@@ -70,7 +71,8 @@ export type Meal = {
   recipe: Recipe;
   swaps: Swap[];
   have: string[]; // ingredient names you already have
-  tweak?: Recommendation; // the recommendation you chose for a dish that did not fit
+  tweaks?: Recommendation[]; // the fixes you picked for a dish that did not fit
+  tweak?: Recommendation; // older single pick, still read by the cook screen
   orderUrl?: string; // the store cart you shopped in, to reopen it while you wait
   stage: MealStage;
   slotId?: string; // the plan slot this meal fills, if any

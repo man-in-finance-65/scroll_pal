@@ -33,6 +33,7 @@ export default function Cook() {
   const last = i === steps.length - 1;
   const mins = minutesIn(steps[i]);
   const swaps = meal.swaps.filter((x) => x.kcal_saved !== 0 || x.to !== x.from);
+  const picks = meal.tweaks ?? (meal.tweak ? [meal.tweak] : []);
 
   function done() {
     const res = s.cookMeal();
@@ -78,11 +79,15 @@ export default function Cook() {
           <Button title={left === null ? `Start ${mins} min timer` : left === 0 ? "Restart timer" : "Stop timer"} kind="secondary" onPress={() => setLeft(left === null || left === 0 ? mins * 60 : null)} style={{ alignSelf: "stretch" }} />
         </Card>
       ) : null}
-      {i === 0 && meal.tweak ? (
+      {i === 0 && picks.length ? (
         <Card>
-          <Text style={[type.label, { color: t.tint }]}>Your pick</Text>
-          <Text style={[type.h2, { color: t.text }]}>{meal.tweak.title}</Text>
-          <Text style={[type.caption, { color: t.sub }]}>{meal.tweak.how}</Text>
+          <Text style={[type.label, { color: t.tint }]}>{picks.length === 1 ? "Your pick" : "Your picks"}</Text>
+          {picks.map((p) => (
+            <View key={p.title}>
+              <Text style={[type.h2, { color: t.text }]}>{p.title}</Text>
+              <Text style={[type.caption, { color: t.sub }]}>{p.how}</Text>
+            </View>
+          ))}
         </Card>
       ) : null}
       {i === 0 && swaps.length ? (

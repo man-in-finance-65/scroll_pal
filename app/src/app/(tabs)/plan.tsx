@@ -65,7 +65,7 @@ function Week() {
   function cook(slot: PlanSlot) {
     const recipe = s.recipes.find((r) => r.title === slot.recipeTitle);
     if (!recipe) return router.push("/meal/feed");
-    s.startMeal(recipe, slot.id);
+    s.startMeal(recipe, slot.id, slot.tweaks);
     router.push("/meal/swaps");
   }
 
@@ -85,7 +85,7 @@ function Week() {
       }
     >
       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Text style={[type.label, { color: t.sub }]}>Our pact · {slots.length} meals</Text>
+        <Text style={[type.label, { color: t.sub }]}>Our pact · {slots.length} {slots.length === 1 ? "meal" : "meals"}</Text>
         <Pill text={`${done} of ${slots.length} cooked`} color={brand.mint} />
       </View>
       {slots.map((slot) => (

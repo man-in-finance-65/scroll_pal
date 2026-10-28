@@ -51,6 +51,20 @@ export function pactPlan(pact: Pact, recipes: Recipe[], goal: Goal, now = new Da
   return { id: Date.now().toString(36), createdAt: now.toISOString(), goal, days: 7, summary: `${n} meals this week`, recipe: recipes[0], slots, confirmed: true };
 }
 
+// Adds a recipe (and the fixes you picked) to the plan: the first open night without a recipe, else one more night
+// after the last. No plan this week: a new plan with just this meal, tonight.
+export function planWith(plan: Plan | null, recipe: Recipe, tweaks: Recommendation[], goal: Goal, now = new Date()): Plan {
+  const fill = { recipeTitle: recipe.title, meal: recipe.title, tweaks };
+  const open = plan?.slots.find((x) => x.status === "planned" && !x.recipeTitle);
+  if (plan && open) return { ...plan, slots: plan.slots.map((x) => (x.id === open.id ? { ...x, ...fill } : x)) };
+  const last = plan?.slots[plan.slots.length - 1];
+  const [y, m, d] = last ? last.date.split("-").map(Number) : [now.getFullYear(), now.getMonth() + 1, now.getDate() - 1];
+  const date = localDay(new Date(y, m - 1, d + 1, 12).toISOString());
+  const slot: PlanSlot = { id: `add-${Date.now().toString(36)}`, day: (last?.day ?? 0) + 1, date, slot: "dinner", kind: "cook", note: "", status: "planned", ...fill };
+  if (plan) return { ...plan, slots: [...plan.slots, slot] };
+  return { id: Date.now().toString(36), createdAt: now.toISOString(), goal, days: 7, summary: "1 meal this week", recipe, slots: [slot], confirmed: true };
+}
+
 // Gives empty pact slots a recipe. Returns the same plan if nothing changed.
 export function fillPlan(plan: Plan, recipes: Recipe[]): Plan {
   if (!recipes.length || plan.slots.every((s) => s.recipeTitle)) return plan;

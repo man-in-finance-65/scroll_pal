@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api, ApiError, type Shot } from "./api";
 import { fx } from "./fx";
 import { plain } from "./format";
-import { fillPlan, mondayOf, pactPlan } from "./meal";
+import { fillPlan, mondayOf, pactPlan, planWith } from "./meal";
 import type { Body, ChatSave, CookLog, DietId, Goal, Job, Meal, MealStage, Plan, Recipe, Recommendation, Stamp, Swap } from "./types";
 import { computeProgress, xpMath, type Progress, type XpEvent } from "./xp";
 
@@ -68,10 +68,11 @@ type Ctx = State & {
   setDiet: (d: DietId[]) => void;
   setBody: (b: Body) => void;
   finishOnboarding: () => void;
-  startMeal: (recipe: Recipe, slotId?: string) => void;
+  startMeal: (recipe: Recipe, slotId?: string, tweaks?: Recommendation[]) => void;
   setSwaps: (swaps: Swap[]) => void;
   setHave: (have: string[]) => void;
-  setTweak: (tweak: Recommendation | undefined) => void;
+  setTweaks: (tweaks: Recommendation[]) => void;
+  addMealToPlan: () => void; // puts the meal you're on (with your picked fixes) into this week's plan
   setOrderUrl: (url: string) => void;
   setStage: (stage: MealStage) => void;
   cookMeal: () => DoneResult | null; // +50 XP
@@ -165,11 +166,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const finishOnboarding = useCallback(() => update((s) => ({ ...s, onboarded: true })), [update]);
 
   const setMeal = useCallback((fn: (m: Meal) => Meal) => update((s) => (s.meal ? { ...s, meal: fn(s.meal) } : s)), [update]);
-  const startMeal = useCallback((recipe: Recipe, slotId?: string) =>
-    update((s) => ({ ...s, recipe, meal: { id: newId(), recipe, swaps: [], have: [], stage: "swaps", slotId } })), [update]);
+  const startMeal = useCallback((recipe: Recipe, slotId?: string, tweaks?: Recommendation[]) =>
+    update((s) => ({ ...s, recipe, meal: { id: newId(), recipe, swaps: [], have: [], stage: "swaps", slotId, tweaks } })), [update]);
   // Swap "from" stays exact (it matches an ingredient); what Pal says is cleaned to house style.
   const setSwaps = useCallback((swaps: Swap[]) => setMeal((m) => ({ ...m, swaps: swaps.map((x) => ({ ...x, to: plain(x.to), why: plain(x.why) })) })), [setMeal]);
-  const setTweak = useCallback((tweak: Recommendation | undefined) => setMeal((m) => ({ ...m, tweak })), [setMeal]);
+  const setTweaks = useCallback((tweaks: Recommendation[]) => setMeal((m) => ({ ...m, tweaks })), [setMeal]);
+  // A plan from an earlier week is finished, so the meal starts this week's plan instead.
+  const addMealToPlan = useCallback(() => update((s) => {
+    if (!s.meal) return s;
+    const current = s.pactWeek === mondayOf() ? s.plan : null;
+    return { ...s, meal: null, pactWeek: mondayOf(), plan: planWith(current, s.meal.recipe, s.meal.tweaks ?? [], s.goal) };
+  }), [update]);
   const setHave = useCallback((have: string[]) => setMeal((m) => ({ ...m, have })), [setMeal]);
   const setOrderUrl = useCallback((orderUrl: string) => setMeal((m) => ({ ...m, orderUrl })), [setMeal]);
   const setStage = useCallback((stage: MealStage) => setMeal((m) => ({ ...m, stage })), [setMeal]);
@@ -245,7 +252,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const value: Ctx = {
     ...state, ready, progress, jobs, digest, dismissJob, saveChat, clearChat, celebration, clearCelebration, openRecipe,
-    setName, setGoal, setDiet, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweak, setOrderUrl, setStage, cookMeal, eatMeal,
+    setName, setGoal, setDiet, setBody, finishOnboarding, startMeal, setSwaps, setHave, setTweaks, addMealToPlan, setOrderUrl, setStage, cookMeal, eatMeal,
     makePact, skipSlot, markFeedbackAsked, resetAll,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;

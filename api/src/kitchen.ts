@@ -186,24 +186,24 @@ export function scoreFix(base: Macros, adds: Adds, checks: Check[]): { score: nu
 // Real foods with rough numbers per serving (USDA style), marked estimated. tag = which diets can't have it.
 type Food = { title: string; how: string; kind: "recipe" | "side"; adds: Adds; for: string[] };
 const FOODS: Food[] = [
-  { title: "Add egg whites", how: "Whisk 3 egg whites into the dish at the end, or scramble them on the side.", kind: "recipe", adds: { kcal: 51, protein_g: 11, carbs_g: 0.7, fat_g: 0.2 }, for: ["protein", "density"] },
-  { title: "Add shrimp", how: "Toss 100 g cooked shrimp into the pan for the last 2 minutes.", kind: "recipe", adds: { kcal: 99, protein_g: 24, carbs_g: 0.2, fat_g: 0.3 }, for: ["protein", "density"] },
-  { title: "Tuna on the side", how: "A small can of tuna in water (about 100 g drained) with lemon and pepper.", kind: "side", adds: { kcal: 116, protein_g: 26, carbs_g: 0, fat_g: 1 }, for: ["protein", "density"] },
-  { title: "Greek yogurt on the side", how: "170 g of plain 0% Greek yogurt, with herbs or a little hot sauce.", kind: "side", adds: { kcal: 100, protein_g: 17, carbs_g: 6, fat_g: 0.7 }, for: ["protein", "density"] },
-  { title: "Cottage cheese on the side", how: "150 g of low fat cottage cheese with black pepper.", kind: "side", adds: { kcal: 108, protein_g: 18, carbs_g: 4, fat_g: 1.5 }, for: ["protein", "density"] },
-  { title: "More chicken breast", how: "Cook 100 g more chicken breast per serving into the dish.", kind: "recipe", adds: { kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 }, for: ["protein", "density"] },
-  { title: "Add firm tofu", how: "Cube 100 g firm tofu, brown it, and stir it into the dish.", kind: "recipe", adds: { kcal: 144, protein_g: 17, carbs_g: 2.8, fat_g: 8.7 }, for: ["protein"] },
-  { title: "Add seitan", how: "Slice 100 g seitan, sear it, and stir it into the dish.", kind: "recipe", adds: { kcal: 120, protein_g: 21, carbs_g: 4, fat_g: 2 }, for: ["protein", "density"] },
-  { title: "Edamame on the side", how: "100 g shelled edamame with a pinch of salt.", kind: "side", adds: { kcal: 121, protein_g: 12, carbs_g: 9, fat_g: 5 }, for: ["protein"] },
-  { title: "Stir in lentils", how: "Stir 100 g cooked lentils into the dish to bulk it up.", kind: "recipe", adds: { kcal: 116, protein_g: 9, carbs_g: 20, fat_g: 0.4 }, for: ["protein", "carbs"] },
+  { title: "Add 3 egg whites", how: "Whisk 3 egg whites into the dish at the end, or scramble them on the side.", kind: "recipe", adds: { kcal: 51, protein_g: 11, carbs_g: 0.7, fat_g: 0.2 }, for: ["protein", "density"] },
+  { title: "Add 100 g shrimp", how: "Toss 100 g cooked shrimp into the pan for the last 2 minutes.", kind: "recipe", adds: { kcal: 99, protein_g: 24, carbs_g: 0.2, fat_g: 0.3 }, for: ["protein", "density"] },
+  { title: "100 g tuna on the side", how: "A small can of tuna in water (about 100 g drained) with lemon and pepper.", kind: "side", adds: { kcal: 116, protein_g: 26, carbs_g: 0, fat_g: 1 }, for: ["protein", "density"] },
+  { title: "170 g Greek yogurt on the side", how: "170 g of plain 0% Greek yogurt, with herbs or a little hot sauce.", kind: "side", adds: { kcal: 100, protein_g: 17, carbs_g: 6, fat_g: 0.7 }, for: ["protein", "density"] },
+  { title: "150 g cottage cheese on the side", how: "150 g of low fat cottage cheese with black pepper.", kind: "side", adds: { kcal: 108, protein_g: 18, carbs_g: 4, fat_g: 1.5 }, for: ["protein", "density"] },
+  { title: "Add 100 g chicken breast", how: "Cook 100 g more chicken breast per serving into the dish.", kind: "recipe", adds: { kcal: 165, protein_g: 31, carbs_g: 0, fat_g: 3.6 }, for: ["protein", "density"] },
+  { title: "Add 100 g firm tofu", how: "Cube 100 g firm tofu, brown it, and stir it into the dish.", kind: "recipe", adds: { kcal: 144, protein_g: 17, carbs_g: 2.8, fat_g: 8.7 }, for: ["protein"] },
+  { title: "Add 100 g seitan", how: "Slice 100 g seitan, sear it, and stir it into the dish.", kind: "recipe", adds: { kcal: 120, protein_g: 21, carbs_g: 4, fat_g: 2 }, for: ["protein", "density"] },
+  { title: "100 g edamame on the side", how: "100 g shelled edamame with a pinch of salt.", kind: "side", adds: { kcal: 121, protein_g: 12, carbs_g: 9, fat_g: 5 }, for: ["protein"] },
+  { title: "Stir in 100 g lentils", how: "Stir 100 g cooked lentils into the dish to bulk it up.", kind: "recipe", adds: { kcal: 116, protein_g: 9, carbs_g: 20, fat_g: 0.4 }, for: ["protein", "carbs"] },
   { title: "Top it with 2 eggs", how: "Fry or soft boil 2 eggs and put them on top.", kind: "recipe", adds: { kcal: 143, protein_g: 12.6, carbs_g: 0.7, fat_g: 9.5 }, for: ["protein", "kcal", "target"] },
-  { title: "A protein shake with it", how: "One scoop of protein powder (about 30 g) shaken with water.", kind: "side", adds: { kcal: 120, protein_g: 24, carbs_g: 3, fat_g: 1.5 }, for: ["protein", "density"] },
-  { title: "A cup of rice on the side", how: "160 g of cooked rice (about 1 cup).", kind: "side", adds: { kcal: 208, protein_g: 4.3, carbs_g: 45, fat_g: 0.5 }, for: ["carbs", "kcal", "target"] },
-  { title: "Add potatoes", how: "Roast or boil 200 g of potatoes and serve them with it.", kind: "recipe", adds: { kcal: 174, protein_g: 3.7, carbs_g: 40, fat_g: 0.2 }, for: ["carbs", "kcal", "target"] },
-  { title: "A banana after", how: "One medium banana for dessert.", kind: "side", adds: { kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 }, for: ["carbs"] },
-  { title: "A glass of milk", how: "250 ml of whole milk with the meal.", kind: "side", adds: { kcal: 150, protein_g: 8, carbs_g: 12, fat_g: 8 }, for: ["kcal", "target", "carbs"] },
-  { title: "Finish with olive oil", how: "Drizzle 1 tablespoon of olive oil over the plate.", kind: "recipe", adds: { kcal: 119, protein_g: 0, carbs_g: 0, fat_g: 13.5 }, for: ["kcal", "target"] },
-  { title: "A handful of almonds", how: "30 g of almonds as a side or snack after.", kind: "side", adds: { kcal: 174, protein_g: 6, carbs_g: 6, fat_g: 15 }, for: ["kcal", "target"] },
+  { title: "1 protein shake with it", how: "One scoop of protein powder (about 30 g) shaken with water.", kind: "side", adds: { kcal: 120, protein_g: 24, carbs_g: 3, fat_g: 1.5 }, for: ["protein", "density"] },
+  { title: "1 cup of rice on the side", how: "160 g of cooked rice (about 1 cup).", kind: "side", adds: { kcal: 208, protein_g: 4.3, carbs_g: 45, fat_g: 0.5 }, for: ["carbs", "kcal", "target"] },
+  { title: "Add 200 g potatoes", how: "Roast or boil 200 g of potatoes and serve them with it.", kind: "recipe", adds: { kcal: 174, protein_g: 3.7, carbs_g: 40, fat_g: 0.2 }, for: ["carbs", "kcal", "target"] },
+  { title: "1 banana after", how: "One medium banana for dessert.", kind: "side", adds: { kcal: 105, protein_g: 1.3, carbs_g: 27, fat_g: 0.4 }, for: ["carbs"] },
+  { title: "250 ml of milk with it", how: "250 ml of whole milk with the meal.", kind: "side", adds: { kcal: 150, protein_g: 8, carbs_g: 12, fat_g: 8 }, for: ["kcal", "target", "carbs"] },
+  { title: "Finish with 1 tbsp olive oil", how: "Drizzle 1 tablespoon of olive oil over the plate.", kind: "recipe", adds: { kcal: 119, protein_g: 0, carbs_g: 0, fat_g: 13.5 }, for: ["kcal", "target"] },
+  { title: "30 g almonds on the side", how: "30 g of almonds as a side or snack after.", kind: "side", adds: { kcal: 174, protein_g: 6, carbs_g: 6, fat_g: 15 }, for: ["kcal", "target"] },
 ];
 
 // Lighter changes to the dish itself, sized from its own numbers.
@@ -226,7 +226,7 @@ function lighter(base: Macros): Food[] {
       { name: "firm tofu", how: "100 g firm tofu", kcal: 144, protein_g: 17, carbs_g: 2.8, fat_g: 8.7 },
       { name: "seitan", how: "100 g seitan", kcal: 120, protein_g: 21, carbs_g: 4, fat_g: 2 },
     ]) {
-      out.push({ title: `Half the carbs, add ${p.name}`, how: `Use half the rice, pasta or noodles and add ${p.how} per serving instead.`, kind: "recipe", adds: { kcal: -cut * 4 + p.kcal, protein_g: p.protein_g - 2, carbs_g: -cut + p.carbs_g, fat_g: p.fat_g }, for: ["protein", "density"] });
+      out.push({ title: `Half the carbs, add ${p.how}`, how: `Use half the rice, pasta or noodles and add ${p.how} per serving instead.`, kind: "recipe", adds: { kcal: -cut * 4 + p.kcal, protein_g: p.protein_g - 2, carbs_g: -cut + p.carbs_g, fat_g: p.fat_g }, for: ["protein", "density"] });
     }
   }
   const q = { kcal: -Math.floor(base.kcal / 4), protein_g: -Math.floor(base.protein_g / 4), carbs_g: -Math.floor(base.carbs_g / 4), fat_g: -Math.floor(base.fat_g / 4) };
@@ -276,7 +276,7 @@ function recPrompt(recipe: Recipe, goal: Goal, base: Macros, checks: Check[], di
     `on a cut, add protein that costs few calories (egg whites, shrimp, Greek yogurt, tuna), not fatty protein; when energy is too high, change the dish (less oil, fewer carbs, smaller portion). ` +
     `Mix kinds: "recipe" changes the dish itself (name the exact ingredient and amount per serving), "side" goes next to it. Match the dish's cuisine so it still tastes right.\n` +
     `fixes = the id of the check it targets. adds = what it changes PER SERVING in kcal, protein_g, carbs_g, fat_g (negative when it removes). ` +
-    `Title under 40 characters, how under 110 characters with the amount. kcal = null, source "estimated". Never use hyphens or dashes.`
+    `Title is the action with the exact amount, under 40 characters, e.g. "Add 100 g chicken breast". How under 110 characters with the amount. kcal = null, source "estimated". Never use hyphens or dashes.`
   );
 }
 
